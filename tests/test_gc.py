@@ -1,12 +1,12 @@
 import gc
 
-import hiredis
+import libvalkey
 
 
 def test_reader_gc():
     class A:
         def __init__(self):
-            self.reader = hiredis.Reader(replyError=self.reply_error)
+            self.reader = libvalkey.Reader(replyError=self.reply_error)
 
         def reply_error(self, error):
             return Exception()

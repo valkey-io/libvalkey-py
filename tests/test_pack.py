@@ -1,4 +1,4 @@
-import hiredis
+import libvalkey
 import pytest
 
 testdata = [
@@ -30,13 +30,13 @@ testdata_ids = [
 
 @pytest.mark.parametrize("cmd,expected_packed_cmd", testdata, ids=testdata_ids)
 def test_basic(cmd, expected_packed_cmd):
-    packed_cmd = hiredis.pack_command(cmd)
+    packed_cmd = libvalkey.pack_command(cmd)
     assert packed_cmd == expected_packed_cmd
 
 
 def test_wrong_type():
     with pytest.raises(TypeError):
-        hiredis.pack_command(("HSET", "foo", True))
+        libvalkey.pack_command(("HSET", "foo", True))
 
     class Bar:
         def __init__(self) -> None:
@@ -44,4 +44,4 @@ def test_wrong_type():
             self.value = 36
 
     with pytest.raises(TypeError):
-        hiredis.pack_command(("HSET", "foo", Bar()))
+        libvalkey.pack_command(("HSET", "foo", Bar()))

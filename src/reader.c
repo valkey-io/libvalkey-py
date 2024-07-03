@@ -1,20 +1,21 @@
 #include "reader.h"
+#include "libvalkey.h"
 
 #include <assert.h>
 
-static void Reader_dealloc(hiredis_ReaderObject *self);
-static int Reader_traverse(hiredis_ReaderObject *self, visitproc visit, void *arg);
-static int Reader_init(hiredis_ReaderObject *self, PyObject *args, PyObject *kwds);
+static void Reader_dealloc(libvalkey_ReaderObject *self);
+static int Reader_traverse(libvalkey_ReaderObject *self, visitproc visit, void *arg);
+static int Reader_init(libvalkey_ReaderObject *self, PyObject *args, PyObject *kwds);
 static PyObject *Reader_new(PyTypeObject *type, PyObject *args, PyObject *kwds);
-static PyObject *Reader_feed(hiredis_ReaderObject *self, PyObject *args);
-static PyObject *Reader_gets(hiredis_ReaderObject *self, PyObject *args);
-static PyObject *Reader_setmaxbuf(hiredis_ReaderObject *self, PyObject *arg);
-static PyObject *Reader_getmaxbuf(hiredis_ReaderObject *self);
-static PyObject *Reader_len(hiredis_ReaderObject *self);
-static PyObject *Reader_has_data(hiredis_ReaderObject *self);
-static PyObject *Reader_set_encoding(hiredis_ReaderObject *self, PyObject *args, PyObject *kwds);
+static PyObject *Reader_feed(libvalkey_ReaderObject *self, PyObject *args);
+static PyObject *Reader_gets(libvalkey_ReaderObject *self, PyObject *args);
+static PyObject *Reader_setmaxbuf(libvalkey_ReaderObject *self, PyObject *arg);
+static PyObject *Reader_getmaxbuf(libvalkey_ReaderObject *self);
+static PyObject *Reader_len(libvalkey_ReaderObject *self);
+static PyObject *Reader_has_data(libvalkey_ReaderObject *self);
+static PyObject *Reader_set_encoding(libvalkey_ReaderObject *self, PyObject *args, PyObject *kwds);
 
-static PyMethodDef hiredis_ReaderMethods[] = {
+static PyMethodDef libvalkey_ReaderMethods[] = {
     {"feed", (PyCFunction)Reader_feed, METH_VARARGS, NULL },
     {"gets", (PyCFunction)Reader_gets, METH_VARARGS, NULL },
     {"setmaxbuf", (PyCFunction)Reader_setmaxbuf, METH_O, NULL },
@@ -25,10 +26,10 @@ static PyMethodDef hiredis_ReaderMethods[] = {
     { NULL }  /* Sentinel */
 };
 
-PyTypeObject hiredis_ReaderType = {
+PyTypeObject libvalkey_ReaderType = {
     PyVarObject_HEAD_INIT(NULL, 0)
-    MOD_HIREDIS ".Reader",        /*tp_name*/
-    sizeof(hiredis_ReaderObject), /*tp_basicsize*/
+    MOD_LIBVALKEY ".Reader",        /*tp_name*/
+    sizeof(libvalkey_ReaderObject), /*tp_basicsize*/
     0,                            /*tp_itemsize*/
     (destructor)Reader_dealloc,   /*tp_dealloc*/
     0,                            /*tp_print*/
@@ -46,14 +47,14 @@ PyTypeObject hiredis_ReaderType = {
     0,                            /*tp_setattro*/
     0,                            /*tp_as_buffer*/
     Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_HAVE_GC, /*tp_flags*/
-    "Hiredis protocol reader",    /*tp_doc */
+    "Valkey protocol reader",    /*tp_doc */
     (traverseproc)Reader_traverse,/*tp_traverse */
     0,                            /*tp_clear */
     0,                            /*tp_richcompare */
     0,                            /*tp_weaklistoffset */
     0,                            /*tp_iter */
     0,                            /*tp_iternext */
-    hiredis_ReaderMethods,        /*tp_methods */
+    libvalkey_ReaderMethods,        /*tp_methods */
     0,                            /*tp_members */
     0,                            /*tp_getset */
     0,                            /*tp_base */
@@ -66,12 +67,12 @@ PyTypeObject hiredis_ReaderType = {
     Reader_new,                   /*tp_new */
 };
 
-static void *tryParentize(const redisReadTask *task, PyObject *obj) {
+static void *tryParentize(const valkeyReadTask *task, PyObject *obj) {
     PyObject *parent;
     if (task && task->parent) {
         parent = (PyObject*)task->parent->obj;
         switch (task->parent->type) {
-            case REDIS_REPLY_MAP:
+            case VALKEY_REPLY_MAP:
                 if (task->idx % 2 == 0) {
                     /* Set a temporary item to save the object as a key. */
                     PyDict_SetItem(parent, obj, Py_None);
@@ -82,7 +83,7 @@ static void *tryParentize(const redisReadTask *task, PyObject *obj) {
                     PyDict_SetItem(parent, last_key, obj);
                 }
                 break;
-            case REDIS_REPLY_SET:
+            case VALKEY_REPLY_SET:
                 assert(PyAnySet_CheckExact(parent));
                 PySet_Add(parent, obj);
                 break;
@@ -94,7 +95,7 @@ static void *tryParentize(const redisReadTask *task, PyObject *obj) {
     return obj;
 }
 
-static PyObject *createDecodedString(hiredis_ReaderObject *self, const char *str, size_t len) {
+static PyObject *createDecodedString(libvalkey_ReaderObject *self, const char *str, size_t len) {
     PyObject *obj;
 
     if (self->encoding == NULL || !self->shouldDecode) {
@@ -132,11 +133,11 @@ static void *createError(PyObject *errorCallable, char *errstr, size_t len) {
     return obj;
 }
 
-static void *createStringObject(const redisReadTask *task, char *str, size_t len) {
-    hiredis_ReaderObject *self = (hiredis_ReaderObject*)task->privdata;
+static void *createStringObject(const valkeyReadTask *task, char *str, size_t len) {
+    libvalkey_ReaderObject *self = (libvalkey_ReaderObject*)task->privdata;
     PyObject *obj;
 
-    if (task->type == REDIS_REPLY_ERROR) {
+    if (task->type == VALKEY_REPLY_ERROR) {
         obj = createError(self->replyErrorClass, str, len);
         if (obj == NULL) {
             if (self->error.ptype == NULL)
@@ -146,7 +147,7 @@ static void *createStringObject(const redisReadTask *task, char *str, size_t len
             Py_INCREF(obj);
         }
     } else {
-        if (task->type == REDIS_REPLY_VERB) {
+        if (task->type == VALKEY_REPLY_VERB) {
             /* Skip 4 bytes of verbatim type header. */
             memmove(str, str+4, len);
             len -= 4;
@@ -156,13 +157,13 @@ static void *createStringObject(const redisReadTask *task, char *str, size_t len
     return tryParentize(task, obj);
 }
 
-static void *createArrayObject(const redisReadTask *task, size_t elements) {
+static void *createArrayObject(const valkeyReadTask *task, size_t elements) {
     PyObject *obj;
     switch (task->type) {
-        case REDIS_REPLY_MAP:
+        case VALKEY_REPLY_MAP:
             obj = PyDict_New();
             break;
-        case REDIS_REPLY_SET:
+        case VALKEY_REPLY_SET:
             obj = PySet_New(NULL);
             break;
         default:
@@ -171,25 +172,25 @@ static void *createArrayObject(const redisReadTask *task, size_t elements) {
     return tryParentize(task, obj);
 }
 
-static void *createIntegerObject(const redisReadTask *task, long long value) {
+static void *createIntegerObject(const valkeyReadTask *task, long long value) {
     PyObject *obj;
     obj = PyLong_FromLongLong(value);
     return tryParentize(task, obj);
 }
 
-static void *createDoubleObject(const redisReadTask *task, double value, char *str, size_t le) {
+static void *createDoubleObject(const valkeyReadTask *task, double value, char *str, size_t le) {
     PyObject *obj;
     obj = PyFloat_FromDouble(value);
     return tryParentize(task, obj);
 }
 
-static void *createNilObject(const redisReadTask *task) {
+static void *createNilObject(const valkeyReadTask *task) {
     PyObject *obj = Py_None;
     Py_INCREF(obj);
     return tryParentize(task, obj);
 }
 
-static void *createBoolObject(const redisReadTask *task, int bval) {
+static void *createBoolObject(const valkeyReadTask *task, int bval) {
     PyObject *obj;
     obj = PyBool_FromLong((long)bval);
     return tryParentize(task, obj);
@@ -199,21 +200,21 @@ static void freeObject(void *obj) {
     Py_XDECREF(obj);
 }
 
-redisReplyObjectFunctions hiredis_ObjectFunctions = {
-    createStringObject,  // void *(*createString)(const redisReadTask*, char*, size_t);
-    createArrayObject,   // void *(*createArray)(const redisReadTask*, size_t);
-    createIntegerObject, // void *(*createInteger)(const redisReadTask*, long long);
-    createDoubleObject,  // void *(*createDoubleObject)(const redisReadTask*, double, char*, size_t);
-    createNilObject,     // void *(*createNil)(const redisReadTask*);
-    createBoolObject,    // void *(*createBoolObject)(const redisReadTask*, int);
+valkeyReplyObjectFunctions libvalkey_ObjectFunctions = {
+    createStringObject,  // void *(*createString)(const valkeyReadTask*, char*, size_t);
+    createArrayObject,   // void *(*createArray)(const valkeyReadTask*, size_t);
+    createIntegerObject, // void *(*createInteger)(const valkeyReadTask*, long long);
+    createDoubleObject,  // void *(*createDoubleObject)(const valkeyReadTask*, double, char*, size_t);
+    createNilObject,     // void *(*createNil)(const valkeyReadTask*);
+    createBoolObject,    // void *(*createBoolObject)(const valkeyReadTask*, int);
     freeObject           // void (*freeObject)(void*);
 };
 
-static void Reader_dealloc(hiredis_ReaderObject *self) {
+static void Reader_dealloc(libvalkey_ReaderObject *self) {
     PyObject_GC_UnTrack(self);
     // we don't need to free self->encoding as the buffer is managed by Python
     // https://docs.python.org/3/c-api/arg.html#strings-and-buffers
-    redisReaderFree(self->reader);
+    valkeyReaderFree(self->reader);
     Py_CLEAR(self->protocolErrorClass);
     Py_CLEAR(self->replyErrorClass);
     Py_CLEAR(self->notEnoughDataObject);
@@ -221,7 +222,7 @@ static void Reader_dealloc(hiredis_ReaderObject *self) {
     ((PyObject *)self)->ob_type->tp_free((PyObject*)self);
 }
 
-static int Reader_traverse(hiredis_ReaderObject *self, visitproc visit, void *arg) {
+static int Reader_traverse(libvalkey_ReaderObject *self, visitproc visit, void *arg) {
     Py_VISIT(self->protocolErrorClass);
     Py_VISIT(self->replyErrorClass);
     Py_VISIT(self->notEnoughDataObject);
@@ -243,7 +244,7 @@ static int _Reader_set_exception(PyObject **target, PyObject *value) {
     return 1;
 }
 
-static int _Reader_set_encoding(hiredis_ReaderObject *self, char *encoding, char *errors) {
+static int _Reader_set_encoding(libvalkey_ReaderObject *self, char *encoding, char *errors) {
     PyObject *codecs, *result;
 
     if (encoding) {  // validate that the encoding exists, raises LookupError if not
@@ -277,7 +278,7 @@ static int _Reader_set_encoding(hiredis_ReaderObject *self, char *encoding, char
     return 0;
 }
 
-static int Reader_init(hiredis_ReaderObject *self, PyObject *args, PyObject *kwds) {
+static int Reader_init(libvalkey_ReaderObject *self, PyObject *args, PyObject *kwds) {
     static char *kwlist[] = { "protocolError", "replyError", "encoding", "errors", "notEnoughData", NULL };
     PyObject *protocolErrorClass = NULL;
     PyObject *replyErrorClass = NULL;
@@ -308,19 +309,19 @@ static int Reader_init(hiredis_ReaderObject *self, PyObject *args, PyObject *kwd
 }
 
 static PyObject *Reader_new(PyTypeObject *type, PyObject *args, PyObject *kwds) {
-    hiredis_ReaderObject *self;
-    self = (hiredis_ReaderObject*)type->tp_alloc(type, 0);
+    libvalkey_ReaderObject *self;
+    self = (libvalkey_ReaderObject*)type->tp_alloc(type, 0);
     if (self != NULL) {
-        self->reader = redisReaderCreateWithFunctions(NULL);
-        self->reader->fn = &hiredis_ObjectFunctions;
+        self->reader = valkeyReaderCreateWithFunctions(NULL);
+        self->reader->fn = &libvalkey_ObjectFunctions;
         self->reader->privdata = self;
 
         self->encoding = NULL;
         self->errors = "strict";  // default to "strict" to mimic Python
         self->notEnoughDataObject = Py_False;
         self->shouldDecode = 1;
-        self->protocolErrorClass = HIREDIS_STATE->HiErr_ProtocolError;
-        self->replyErrorClass = HIREDIS_STATE->HiErr_ReplyError;
+        self->protocolErrorClass = LIBVALKEY_STATE->VkErr_ProtocolError;
+        self->replyErrorClass = LIBVALKEY_STATE->VkErr_ReplyError;
         Py_INCREF(self->protocolErrorClass);
         Py_INCREF(self->replyErrorClass);
         Py_INCREF(self->notEnoughDataObject);
@@ -332,7 +333,7 @@ static PyObject *Reader_new(PyTypeObject *type, PyObject *args, PyObject *kwds) 
     return (PyObject*)self;
 }
 
-static PyObject *Reader_feed(hiredis_ReaderObject *self, PyObject *args) {
+static PyObject *Reader_feed(libvalkey_ReaderObject *self, PyObject *args) {
     Py_buffer buf;
     Py_ssize_t off = 0;
     Py_ssize_t len = -1;
@@ -355,7 +356,7 @@ static PyObject *Reader_feed(hiredis_ReaderObject *self, PyObject *args) {
       goto error;
     }
 
-    redisReaderFeed(self->reader, (char *)buf.buf + off, len);
+    valkeyReaderFeed(self->reader, (char *)buf.buf + off, len);
     PyBuffer_Release(&buf);
     Py_RETURN_NONE;
 
@@ -364,7 +365,7 @@ error:
     return NULL;
 }
 
-static PyObject *Reader_gets(hiredis_ReaderObject *self, PyObject *args) {
+static PyObject *Reader_gets(libvalkey_ReaderObject *self, PyObject *args) {
     PyObject *obj;
     PyObject *err;
     char *errstr;
@@ -374,8 +375,8 @@ static PyObject *Reader_gets(hiredis_ReaderObject *self, PyObject *args) {
         return NULL;
     }
 
-    if (redisReaderGetReply(self->reader, (void**)&obj) == REDIS_ERR) {
-        errstr = redisReaderGetError(self->reader);
+    if (valkeyReaderGetReply(self->reader, (void**)&obj) == VALKEY_ERR) {
+        errstr = valkeyReaderGetError(self->reader);
         /* protocolErrorClass might be a callable. call it, then use it's type */
         err = createError(self->protocolErrorClass, errstr, strlen(errstr));
         if (err != NULL) {
@@ -405,11 +406,11 @@ static PyObject *Reader_gets(hiredis_ReaderObject *self, PyObject *args) {
     }
 }
 
-static PyObject *Reader_setmaxbuf(hiredis_ReaderObject *self, PyObject *arg) {
+static PyObject *Reader_setmaxbuf(libvalkey_ReaderObject *self, PyObject *arg) {
     long maxbuf;
 
     if (arg == Py_None)
-        maxbuf = REDIS_READER_MAX_BUF;
+        maxbuf = VALKEY_READER_MAX_BUF;
     else {
         maxbuf = PyLong_AsLong(arg);
         if (maxbuf < 0) {
@@ -425,21 +426,21 @@ static PyObject *Reader_setmaxbuf(hiredis_ReaderObject *self, PyObject *arg) {
     return Py_None;
 }
 
-static PyObject *Reader_getmaxbuf(hiredis_ReaderObject *self) {
+static PyObject *Reader_getmaxbuf(libvalkey_ReaderObject *self) {
     return PyLong_FromSize_t(self->reader->maxbuf);
 }
 
-static PyObject *Reader_len(hiredis_ReaderObject *self) {
+static PyObject *Reader_len(libvalkey_ReaderObject *self) {
     return PyLong_FromSize_t(self->reader->len);
 }
 
-static PyObject *Reader_has_data(hiredis_ReaderObject *self) {
+static PyObject *Reader_has_data(libvalkey_ReaderObject *self) {
     if(self->reader->pos < self->reader->len)
         Py_RETURN_TRUE;
     Py_RETURN_FALSE;
 }
 
-static PyObject *Reader_set_encoding(hiredis_ReaderObject *self, PyObject *args, PyObject *kwds) {
+static PyObject *Reader_set_encoding(libvalkey_ReaderObject *self, PyObject *args, PyObject *kwds) {
     static char *kwlist[] = { "encoding", "errors", NULL };
     char *encoding = NULL;
     char *errors = NULL;
