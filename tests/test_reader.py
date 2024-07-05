@@ -1,9 +1,9 @@
-import hiredis
+import libvalkey
 import pytest
 
 @pytest.fixture()
 def reader():
-  return hiredis.Reader()
+  return libvalkey.Reader()
 
 # def reply():
 #   return reader.gets()
@@ -17,33 +17,33 @@ def test_error_when_feeding_non_string(reader):
 
 def test_protocol_error(reader):
   reader.feed(b"x")
-  with pytest.raises(hiredis.ProtocolError):
+  with pytest.raises(libvalkey.ProtocolError):
     reader.gets()
 
 def test_protocol_error_with_custom_class():
-  r = hiredis.Reader(protocolError=RuntimeError)
+  r = libvalkey.Reader(protocolError=RuntimeError)
   r.feed(b"x")
   with pytest.raises(RuntimeError):
     r.gets()
 
 def test_protocol_error_with_custom_callable():
-  
+
   class CustomException(Exception):
     pass
 
-  r = hiredis.Reader(protocolError=lambda e: CustomException(e))
+  r = libvalkey.Reader(protocolError=lambda e: CustomException(e))
   r.feed(b"x")
   with pytest.raises(CustomException):
     r.gets()
 
 def test_fail_with_wrong_protocol_error_class():
   with pytest.raises(TypeError):
-    hiredis.Reader(protocolError="wrong")
+    libvalkey.Reader(protocolError="wrong")
 
 def test_faulty_protocol_error_class():
   def make_error(errstr):
     1 / 0
-  r = hiredis.Reader(protocolError=make_error)
+  r = libvalkey.Reader(protocolError=make_error)
   r.feed(b"x")
   with pytest.raises(ZeroDivisionError):
     r.gets()
@@ -52,11 +52,11 @@ def test_error_string(reader):
   reader.feed(b"-error\r\n")
   error = reader.gets()
 
-  assert isinstance(error, hiredis.ReplyError)
+  assert isinstance(error, libvalkey.ReplyError)
   assert ("error", ) == error.args
 
 def test_error_string_with_custom_class():
-  r = hiredis.Reader(replyError=RuntimeError)
+  r = libvalkey.Reader(replyError=RuntimeError)
   r.feed(b"-error\r\n")
   error = r.gets()
 
@@ -67,7 +67,7 @@ def test_error_string_with_custom_callable():
   class CustomException(Exception):
     pass
 
-  r= hiredis.Reader(replyError=lambda e: CustomException(e))
+  r= libvalkey.Reader(replyError=lambda e: CustomException(e))
   r.feed(b"-error\r\n")
   error = r.gets()
 
@@ -80,18 +80,18 @@ def test_error_string_with_non_utf8_chars(reader):
 
   expected = "error \ufffd"
 
-  assert isinstance(error, hiredis.ReplyError)
+  assert isinstance(error, libvalkey.ReplyError)
   assert (expected,) == error.args
 
 def test_fail_with_wrong_reply_error_class():
   with pytest.raises(TypeError):
-    hiredis.Reader(replyError="wrong")
+    libvalkey.Reader(replyError="wrong")
 
 def test_faulty_reply_error_class():
   def make_error(errstr):
     1 / 0
 
-  r= hiredis.Reader(replyError=make_error)
+  r= libvalkey.Reader(replyError=make_error)
   r.feed(b"-error\r\n")
   with pytest.raises(ZeroDivisionError):
     r.gets()
@@ -100,7 +100,7 @@ def test_errors_in_nested_multi_bulk(reader):
   reader.feed(b"*2\r\n-err0\r\n-err1\r\n")
 
   for r, error in zip(("err0", "err1"), reader.gets()):
-    assert isinstance(error, hiredis.ReplyError)
+    assert isinstance(error, libvalkey.ReplyError)
     assert (r,) == error.args
 
 def test_errors_with_non_utf8_chars_in_nested_multi_bulk(reader):
@@ -109,7 +109,7 @@ def test_errors_with_non_utf8_chars_in_nested_multi_bulk(reader):
   expected = "err\ufffd"
 
   for r, error in zip((expected, "err1"), reader.gets()):
-    assert isinstance(error, hiredis.ReplyError)
+    assert isinstance(error, libvalkey.ReplyError)
     assert (r,) == error.args
 
 def test_integer(reader):
@@ -170,33 +170,33 @@ def test_bulk_string_without_encoding(reader):
 
 def test_bulk_string_with_encoding():
   snowman = b"\xe2\x98\x83"
-  r= hiredis.Reader(encoding="utf-8")
+  r= libvalkey.Reader(encoding="utf-8")
   r.feed(b"$3\r\n" + snowman + b"\r\n")
   assert snowman.decode("utf-8") == r.gets()
 
 def test_decode_errors_defaults_to_strict():
-  r= hiredis.Reader(encoding="utf-8")
+  r= libvalkey.Reader(encoding="utf-8")
   r.feed(b"+\x80\r\n")
   with pytest.raises(UnicodeDecodeError):
     r.gets()
 
 def test_decode_error_with_ignore_errors():
-  r= hiredis.Reader(encoding="utf-8", errors="ignore")
+  r= libvalkey.Reader(encoding="utf-8", errors="ignore")
   r.feed(b"+\x80value\r\n")
   assert "value" == r.gets()
 
 def test_decode_error_with_surrogateescape_errors():
-  r= hiredis.Reader(encoding="utf-8", errors="surrogateescape")
+  r= libvalkey.Reader(encoding="utf-8", errors="surrogateescape")
   r.feed(b"+\x80value\r\n")
   assert "\udc80value" == r.gets()
 
 def test_invalid_encoding():
   with pytest.raises(LookupError):
-    hiredis.Reader(encoding="unknown")
+    libvalkey.Reader(encoding="unknown")
 
 def test_should_decode_false_flag_prevents_decoding():
   snowman = b"\xe2\x98\x83"
-  r = hiredis.Reader(encoding="utf-8")
+  r = libvalkey.Reader(encoding="utf-8")
   r.feed(b"$3\r\n" + snowman + b"\r\n")
   r.feed(b"$3\r\n" + snowman + b"\r\n")
   assert snowman == r.gets(False)
@@ -204,14 +204,14 @@ def test_should_decode_false_flag_prevents_decoding():
 
 def test_should_decode_true_flag_decodes_as_normal():
   snowman = b"\xe2\x98\x83"
-  r= hiredis.Reader(encoding="utf-8")
+  r= libvalkey.Reader(encoding="utf-8")
   r.feed(b"$3\r\n" + snowman + b"\r\n")
   assert snowman.decode() == r.gets(True)
 
 def test_set_encoding_with_different_encoding():
   snowman_utf8 = b"\xe2\x98\x83"
   snowman_utf16 = b"\xff\xfe\x03&"
-  r= hiredis.Reader(encoding="utf-8")
+  r= libvalkey.Reader(encoding="utf-8")
   r.feed(b"$3\r\n" + snowman_utf8 + b"\r\n")
   r.feed(b"$4\r\n" + snowman_utf16 + b"\r\n")
   assert snowman_utf8.decode() == r.gets()
@@ -220,7 +220,7 @@ def test_set_encoding_with_different_encoding():
 
 def test_set_encoding_to_not_decode():
   snowman = b"\xe2\x98\x83"
-  r= hiredis.Reader(encoding="utf-8")
+  r= libvalkey.Reader(encoding="utf-8")
   r.feed(b"$3\r\n" + snowman + b"\r\n")
   r.feed(b"$3\r\n" + snowman + b"\r\n")
   assert snowman.decode() == r.gets()
@@ -228,12 +228,12 @@ def test_set_encoding_to_not_decode():
   assert snowman == r.gets()
 
 def test_set_encoding_invalid_encoding():
-  r= hiredis.Reader(encoding="utf-8")
+  r= libvalkey.Reader(encoding="utf-8")
   with pytest.raises(LookupError):
     r.set_encoding("unknown")
 
 def test_set_encoding_invalid_error_handler():
-  r = hiredis.Reader(encoding="utf-8")
+  r = libvalkey.Reader(encoding="utf-8")
   with pytest.raises(LookupError):
     r.set_encoding(encoding="utf-8", errors="unknown")
 
@@ -258,8 +258,8 @@ def test_nested_multi_bulk_depth(reader):
   assert [[[[b"!"]]]] == reader.gets()
 
 def test_subclassable(reader):
-  
-  class TestReader(hiredis.Reader):
+
+  class TestReader(libvalkey.Reader):
     pass
 
   reader = TestReader()
@@ -307,7 +307,7 @@ def test_len(reader):
   reader.feed(data)
   assert reader.len() == len(data)
 
-  # hiredis reallocates and removes unused buffer once
+  # libvalkey reallocates and removes unused buffer once
   # there is at least 1K of not used data.
   calls = int((1024 / len(data))) + 1
   for i in range(calls):
@@ -325,5 +325,5 @@ def test_reader_has_data(reader):
   assert reader.has_data() is False
 
 def test_custom_not_enough_data():
-  r = hiredis.Reader(notEnoughData=Ellipsis)
+  r = libvalkey.Reader(notEnoughData=Ellipsis)
   assert r.gets() == Ellipsis

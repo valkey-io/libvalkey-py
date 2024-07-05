@@ -1,15 +1,15 @@
 from typing import Any, Callable, Optional, Union, Tuple
 
 
-class HiredisError(Exception):
+class LibvalkeyError(Exception):
     ...
 
 
-class ProtocolError(HiredisError):
+class ProtocolError(LibvalkeyError):
     ...
 
 
-class ReplyError(HiredisError):
+class ReplyError(LibvalkeyError):
     ...
 
 

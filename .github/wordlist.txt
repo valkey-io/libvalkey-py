@@ -11,16 +11,14 @@ Lua
 Misspelled words:
 PSR
 Packagist
-PhpRedis
-Predis
 PyPI
 README
-Redis
 SHA
 SSL
 TCP
 TLS
 URI
+Valkey
 autoload
 autoloader
 autoloading
@@ -39,6 +37,7 @@ gevent
 hiredis
 keyspace
 keyspaces
+libvalkey
 localhost
 namespace
 pipelining
@@ -46,9 +45,9 @@ pluggable
 py
 rebalanced
 rebalancing
-redis
 runtime
 sharding
 stunnel
 submodules
+valkey
 variadic

@@ -1,55 +1,41 @@
-# hiredis-py
+# libvalkey-py
 
-[![Build Status](https://github.com/redis/hiredis-py/actions/workflows/integration.yaml/badge.svg)](https://github.com/redis/hiredis-py/actions/workflows/integration.yaml)
+[![Build Status](https://github.com/valkey-io/libvalkey-py/actions/workflows/integration.yaml/badge.svg)](https://github.com/valkey-io/libvalkey-py/actions/workflows/integration.yaml)
 [![License](https://img.shields.io/badge/License-BSD_3--Clause-blue.svg)](https://opensource.org/licenses/BSD-3-Clause)
-[![pypi](https://badge.fury.io/py/hiredis.svg)](https://pypi.org/project/hiredis/)
+[![pypi](https://badge.fury.io/py/libvalkey.svg)](https://pypi.org/project/libvalkey/)
 
-Python extension that wraps protocol parsing code in [hiredis][hiredis].
+Python extension that wraps protocol parsing code in [libvalkey][libvalkey].
 It primarily speeds up parsing of multi bulk replies.
 
-[hiredis]: http://github.com/redis/hiredis
-
-## How do I Redis?
-
-[Learn for free at Redis University](https://university.redis.com/)
-
-[Build faster with the Redis Launchpad](https://launchpad.redis.com/)
-
-[Try the Redis Cloud](https://redis.com/try-free/)
-
-[Dive in developer tutorials](https://developer.redis.com/)
-
-[Join the Redis community](https://redis.com/community/)
-
-[Work at Redis](https://redis.com/company/careers/jobs/)
+[libvalkey]: http://github.com/valkey-io/libvalkey
 
 ## Install
 
-hiredis-py is available on [PyPI](https://pypi.org/project/hiredis/), and can be installed via:
+libvalkey-py is available on [PyPI](https://pypi.org/project/libvalkey/), and can be installed via:
 
 ```bash
-pip install hiredis
+pip install libvalkey
 ```
 ## Building and Testing
 
-Building this repository requires a recursive checkout of submodules, and building hiredis. The following example shows how to clone, compile, and run tests. Please note - you will need the gcc installed.
+Building this repository requires a recursive checkout of submodules, and building libvalkey. The following example shows how to clone, compile, and run tests. Please note - you will need the gcc installed.
 
 ```bash
-git clone --recursse-submodules https://github.com/redis/hiredis-py
+git clone --recurse-submodules https://github.com/valkey-io/libvalkey-py
 python setup.py build_ext --inplace
 python -m pytest
 ```
 
 ### Requirements
 
-hiredis-py requires **Python 3.7+**.
+libvalkey-py requires **Python 3.8+**.
 
-Make sure Python development headers are available when installing hiredis-py.
+Make sure Python development headers are available when installing libvalkey-py.
 On Ubuntu/Debian systems, install them with `apt-get install python3-dev`.
 
 ## Usage
 
-The `hiredis` module contains the `Reader` class. This class is responsible for
+The `libvalkey` module contains the `Reader` class. This class is responsible for
 parsing replies from the stream of data that is read from a Redis connection.
 It does not contain functionality to handle I/O.
 
@@ -64,7 +50,7 @@ replies, `gets` should be called multiple times to extract all replies.
 Example:
 
 ```python
->>> reader = hiredis.Reader()
+>>> reader = libvalkey.Reader()
 >>> reader.feed("$5\r\nhello\r\n")
 >>> reader.gets()
 b'hello'
@@ -84,19 +70,19 @@ False
 >>> reader.feed("$5\r\nworld\r\n")
 >>> reader.gets()
 [b'hello', b'world']
->>> reader = hiredis.Reader(notEnoughData=Ellipsis)
+>>> reader = libvalkey.Reader(notEnoughData=Ellipsis)
 >>> reader.gets()
 Ellipsis
 ```
 
 #### Unicode
 
-`hiredis.Reader` is able to decode bulk data to any encoding Python supports.
+`libvalkey.Reader` is able to decode bulk data to any encoding Python supports.
 To do so, specify the encoding you want to use for decoding replies when
 initializing it:
 
 ```python
->>> reader = hiredis.Reader(encoding="utf-8", errors="strict")
+>>> reader = libvalkey.Reader(encoding="utf-8", errors="strict")
 >>> reader.feed(b"$3\r\n\xe2\x98\x83\r\n")
 >>> reader.gets()
 '☃'
@@ -118,14 +104,14 @@ when calling `gets` for the first reply with bulk data.
 
 When a protocol error occurs (because of multiple threads using the same
 socket, or some other condition that causes a corrupt stream), the error
-`hiredis.ProtocolError` is raised. Because the buffer is read in a lazy
+`libvalkey.ProtocolError` is raised. Because the buffer is read in a lazy
 fashion, it will only be raised when `gets` is called and the first reply in
 the buffer contains an error. There is no way to recover from a faulty protocol
 state, so when this happens, the I/O code feeding data to `Reader` should
 probably reconnect.
 
-Redis can reply with error replies (`-ERR ...`). For these replies, the custom
-error class `hiredis.ReplyError` is returned, **but not raised**.
+The server can reply with error replies (`-ERR ...`). For these replies, the
+custom error class `libvalkey.ReplyError` is returned, **but not raised**.
 
 When other error types should be used (so existing code doesn't have to change
 its `except` clauses), `Reader` can be initialized with the `protocolError` and
@@ -136,30 +122,30 @@ error types.
 ## Benchmarks
 
 The repository contains a benchmarking script in the `benchmark` directory,
-which uses [gevent](http://gevent.org/) to have non-blocking I/O and redis-py
+which uses [gevent](http://gevent.org/) to have non-blocking I/O and valkey-py
 to handle connections. These benchmarks are done with a patched version of
-redis-py that uses hiredis-py when it is available.
+valkey-py that uses libvalkey-py when it is available.
 
 All benchmarks are done with 10 concurrent connections.
 
 * SET key value + GET key
-  * redis-py: 11.76 Kops
-  * redis-py *with* hiredis-py: 13.40 Kops
+  * valkey-py: 11.76 Kops
+  * valkey-py *with* libvalkey-py: 13.40 Kops
   * improvement: **1.1x**
 
 List entries in the following tests are 5 bytes.
 
 * LRANGE list 0 **9**:
-  * redis-py: 4.78 Kops
-  * redis-py *with* hiredis-py: 12.94 Kops
+  * valkey-py: 4.78 Kops
+  * valkey-py *with* libvalkey-py: 12.94 Kops
   * improvement: **2.7x**
 * LRANGE list 0 **99**:
-  * redis-py: 0.73 Kops
-  * redis-py *with* hiredis-py: 11.90 Kops
+  * valkey-py: 0.73 Kops
+  * valkey-py *with* libvalkey-py: 11.90 Kops
   * improvement: **16.3x**
 * LRANGE list 0 **999**:
-  * redis-py: 0.07 Kops
-  * redis-py *with* hiredis-py: 5.83 Kops
+  * valkey-py: 0.07 Kops
+  * valkey-py *with* libvalkey-py: 5.83 Kops
   * improvement: **83.2x**
 
 Throughput improvement for simple SET/GET is minimal, but the larger multi bulk replies
@@ -167,4 +153,5 @@ get, the larger the performance improvement is.
 
 ## License
 
-This code is released under the BSD license, after the license of hiredis.
+This code is released under the BSD license, as the license of hiredis-py at
+the time of fork.

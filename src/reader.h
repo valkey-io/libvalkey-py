@@ -1,11 +1,12 @@
 #ifndef __READER_H
 #define __READER_H
 
-#include "hiredis.h"
+#include "valkey/valkey.h"
+#include <Python.h>
 
 typedef struct {
     PyObject_HEAD
-    redisReader *reader;
+    valkeyReader *reader;
     char *encoding;
     char *errors;
     int shouldDecode;
@@ -21,9 +22,9 @@ typedef struct {
         PyObject *pvalue;
         PyObject *ptraceback;
     } error;
-} hiredis_ReaderObject;
+} libvalkey_ReaderObject;
 
-extern PyTypeObject hiredis_ReaderType;
-extern redisReplyObjectFunctions hiredis_ObjectFunctions;
+extern PyTypeObject libvalkey_ReaderType;
+extern valkeyReplyObjectFunctions libvalkey_ObjectFunctions;
 
 #endif

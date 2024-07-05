@@ -1,13 +1,14 @@
 #include "pack.h"
 
 #ifndef _MSC_VER
-#include <hiredis/hiredis.h>
+#include <valkey/valkey.h>
 #else
 /* Workaround for https://bugs.python.org/issue11717.
- * <hiredis/hiredis.h> defines ssize_t which can conflict
+ * <valkey/valkey.h> defines ssize_t which can conflict
  * with Python's definition.
  */
-extern long long redisFormatCommandArgv(char **target, int argc, const char **argv, const size_t *argvlen);
+// TODO: remove this workaround when Python 3.10 is required
+extern long long valkeyFormatCommandArgv(char **target, int argc, const char **argv, const size_t *argvlen);
 typedef char *sds;
 extern void sds_free(void *ptr);
 extern sds sdsempty(void);
@@ -16,7 +17,7 @@ extern sds sdscpylen(sds s, const char *t, size_t len);
 extern sds sdsnewlen(const void *init, size_t initlen);
 #endif
 
-#include <hiredis/sdsalloc.h>
+#include <valkey/alloc.h>
 
 PyObject *
 pack_command(PyObject *cmd)
@@ -32,7 +33,7 @@ pack_command(PyObject *cmd)
     }
 
     Py_ssize_t tokens_number = PyTuple_Size(cmd);
-    sds *tokens = s_malloc(sizeof(sds) * tokens_number);
+    sds *tokens = vk_malloc(sizeof(sds) * tokens_number);
     if (tokens == NULL)
     {
         return PyErr_NoMemory();
@@ -40,7 +41,7 @@ pack_command(PyObject *cmd)
 
     memset(tokens, 0, sizeof(sds) * tokens_number);
 
-    size_t *lengths = hi_malloc(sizeof(size_t) * tokens_number);
+    size_t *lengths = vk_malloc(sizeof(size_t) * tokens_number);
     if (lengths == NULL)
     {
         sds_free(tokens);
@@ -103,7 +104,7 @@ pack_command(PyObject *cmd)
 
     char *resp_bytes = NULL;
 
-    len = redisFormatCommandArgv(&resp_bytes, tokens_number, (const char **)tokens, lengths);
+    len = valkeyFormatCommandArgv(&resp_bytes, tokens_number, (const char **)tokens, lengths);
 
     if (len == -1)
     {
@@ -113,9 +114,9 @@ pack_command(PyObject *cmd)
     }
 
     result = PyBytes_FromStringAndSize(resp_bytes, len);
-    hi_free(resp_bytes);
+    vk_free(resp_bytes);
 cleanup:
     sdsfreesplitres(tokens, tokens_number);
-    hi_free(lengths);
+    vk_free(lengths);
     return result;
 }
