@@ -140,11 +140,23 @@ def test_set(reader):
 
 def test_set_with_nested_dict(reader):
   reader.feed(b"~2\r\n+tangerine\r\n%1\r\n+a\r\n:1\r\n")
-  assert [b"tangerine", {b"a": 1}] == reader.gets()
+  assert [b"tangerine", [(b"a", 1)]] == reader.gets()
+
+def test_dict_with_nested_set(reader):
+  reader.feed(b"%1\r\n+a\r\n~2\r\n:1\r\n:2\r\n")
+  assert [(b"a", [1, 2])] == reader.gets()
+
+def test_map_inside_list(reader):
+  reader.feed(b"*1\r\n%1\r\n+a\r\n:1\r\n")
+  assert [[(b"a", 1)]] == reader.gets()
+
+def test_map_inside_set(reader):
+  reader.feed(b"~1\r\n%1\r\n+a\r\n:1\r\n")
+  assert [[(b"a", 1)]] == reader.gets()
 
 def test_dict(reader):
   reader.feed(b"%2\r\n+radius\r\n,4.5\r\n+diameter\r\n:9\r\n")
-  assert {b"radius": 4.5, b"diameter": 9} == reader.gets()
+  assert [(b"radius", 4.5), (b"diameter", 9)] == reader.gets()
 
 def test_vector(reader):
   reader.feed(b">4\r\n+pubsub\r\n+message\r\n+channel\r\n+message\r\n")

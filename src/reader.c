@@ -75,12 +75,14 @@ static void *tryParentize(const valkeyReadTask *task, PyObject *obj) {
             case VALKEY_REPLY_MAP:
                 if (task->idx % 2 == 0) {
                     /* Set a temporary item to save the object as a key. */
-                    PyDict_SetItem(parent, obj, Py_None);
+                    PyObject *t = PyTuple_New(2);
+                    PyTuple_SET_ITEM(t, 0, obj);
+                    PyTuple_SET_ITEM(t, 1, Py_None);
+                    PyList_Append(parent, t);
                 } else {
-                    /* Pop the temporary item and set proper key and value. */
-                    PyObject *last_item = PyObject_CallMethod(parent, "popitem", NULL);
-                    PyObject *last_key = PyTuple_GetItem(last_item, 0);
-                    PyDict_SetItem(parent, last_key, obj);
+                    PyObject *last_item = PyObject_CallMethod(parent, "pop", NULL);
+                    PyTuple_SET_ITEM(last_item, 1, obj);
+                    PyList_Append(parent, last_item);
                 }
                 break;
             default:
@@ -157,7 +159,8 @@ static void *createArrayObject(const valkeyReadTask *task, size_t elements) {
     PyObject *obj;
     switch (task->type) {
         case VALKEY_REPLY_MAP:
-            obj = PyDict_New();
+            // For maps, don't preallocate the list, but instead append to it.
+            obj = PyList_New(0);
             break;
         default:
             obj = PyList_New(elements);
