@@ -75,17 +75,26 @@ static void *tryParentize(const valkeyReadTask *task, PyObject *obj) {
             case VALKEY_REPLY_MAP:
                 if (task->idx % 2 == 0) {
                     /* Set a temporary item to save the object as a key. */
-                    PyDict_SetItem(parent, obj, Py_None);
+                    if (PyDict_SetItem(parent, obj, Py_None) < 0) {
+                        Py_DECREF(obj);
+                        return NULL;
+                    }
                 } else {
                     /* Pop the temporary item and set proper key and value. */
                     PyObject *last_item = PyObject_CallMethod(parent, "popitem", NULL);
                     PyObject *last_key = PyTuple_GetItem(last_item, 0);
-                    PyDict_SetItem(parent, last_key, obj);
+                    if (PyDict_SetItem(parent, last_key, obj) < 0) {
+                        Py_DECREF(obj);
+                        return NULL;
+                    }
                 }
                 break;
             case VALKEY_REPLY_SET:
                 assert(PyAnySet_CheckExact(parent));
-                PySet_Add(parent, obj);
+                if (PySet_Add(parent, obj) < 0) {
+                    Py_DECREF(obj);
+                    return NULL;
+                }
                 break;
             default:
                 assert(PyList_CheckExact(parent));
@@ -367,8 +376,6 @@ error:
 
 static PyObject *Reader_gets(libvalkey_ReaderObject *self, PyObject *args) {
     PyObject *obj;
-    PyObject *err;
-    char *errstr;
 
     self->shouldDecode = 1;
     if (!PyArg_ParseTuple(args, "|i", &self->shouldDecode)) {
@@ -376,9 +383,20 @@ static PyObject *Reader_gets(libvalkey_ReaderObject *self, PyObject *args) {
     }
 
     if (valkeyReaderGetReply(self->reader, (void**)&obj) == VALKEY_ERR) {
-        errstr = valkeyReaderGetError(self->reader);
-        /* protocolErrorClass might be a callable. call it, then use it's type */
-        err = createError(self->protocolErrorClass, errstr, strlen(errstr));
+        PyObject *err = NULL;
+        char *errstr = valkeyReaderGetError(self->reader);
+        /* This is a hack to avoid
+         * "SystemError: class returned a result with an exception set".
+         * It is caused by the fact that one of callbacks already set an
+         * exception (i.e. failed PyDict_SetItem). Calling createError()
+         * after an exception is set will raise SystemError as per
+         * https://github.com/python/cpython/issues/67759.
+         * Hence, only call createError() if there is no exception set.
+         */
+        if (PyErr_Occurred() == NULL) {
+            /* protocolErrorClass might be a callable. call it, then use it's type */
+            err = createError(self->protocolErrorClass, errstr, strlen(errstr));
+        }
         if (err != NULL) {
             obj = PyObject_Type(err);
             PyErr_SetString(obj, errstr);
