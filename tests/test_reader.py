@@ -152,6 +152,41 @@ def test_dict(reader):
   )
   assert expected == reader.gets()
 
+def test_set_with_nested_dict(reader):
+  reader.feed(b"~2\r\n+tangerine\r\n%1\r\n+a\r\n:1\r\n")
+  if reader.listOnly:
+    assert [b"tangerine", [(b"a", 1)]] == reader.gets()
+  else:
+    with pytest.raises(TypeError):
+      reader.gets()
+
+def test_dict_with_nested_set(reader):
+  reader.feed(b"%1\r\n+a\r\n~2\r\n:1\r\n:2\r\n")
+  expected = (
+      [(b"a", [1, 2])]
+      if reader.listOnly
+      else {b"a": {1, 2}}
+  )
+  assert expected == reader.gets()
+
+def test_map_inside_list(reader):
+  reader.feed(b"*1\r\n%1\r\n+a\r\n:1\r\n")
+  expected = (
+      [[(b"a", 1)]]
+      if reader.listOnly
+      else [{b"a": 1}]
+  )
+  assert expected == reader.gets()
+
+def test_map_inside_set(reader):
+  reader.feed(b"~1\r\n%1\r\n+a\r\n:1\r\n")
+  if reader.listOnly:
+    assert [[(b"a", 1)]] == reader.gets()
+  else:
+    # Map inside set is not allowed in Python
+    with pytest.raises(TypeError):
+      reader.gets()
+
 def test_vector(reader):
   reader.feed(b">4\r\n+pubsub\r\n+message\r\n+channel\r\n+message\r\n")
   assert [b"pubsub", b"message", b"channel", b"message"] == reader.gets()
