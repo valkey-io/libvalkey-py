@@ -67,39 +67,72 @@ PyTypeObject libvalkey_ReaderType = {
     Reader_new,                   /*tp_new */
 };
 
-static void *tryParentize(const valkeyReadTask *task, PyObject *obj) {
-    PyObject *parent;
-    if (task && task->parent) {
-        parent = (PyObject*)task->parent->obj;
-        switch (task->parent->type) {
-            case VALKEY_REPLY_MAP:
-                if (task->idx % 2 == 0) {
-                    /* Set a temporary item to save the object as a key. */
-                    if (PyDict_SetItem(parent, obj, Py_None) < 0) {
-                        Py_DECREF(obj);
-                        return NULL;
-                    }
-                } else {
-                    /* Pop the temporary item and set proper key and value. */
-                    PyObject *last_item = PyObject_CallMethod(parent, "popitem", NULL);
-                    PyObject *last_key = PyTuple_GetItem(last_item, 0);
-                    if (PyDict_SetItem(parent, last_key, obj) < 0) {
-                        Py_DECREF(obj);
-                        return NULL;
-                    }
-                }
-                break;
-            case VALKEY_REPLY_SET:
-                assert(PyAnySet_CheckExact(parent));
-                if (PySet_Add(parent, obj) < 0) {
+static int tryParentize_impl(const valkeyReadTask *task, PyObject *obj, PyObject *parent) {
+    switch (task->parent->type) {
+        case VALKEY_REPLY_MAP:
+            if (task->idx % 2 == 0) {
+                /* Set a temporary item to save the object as a key. */
+                if (PyDict_SetItem(parent, obj, Py_None) < 0) {
                     Py_DECREF(obj);
-                    return NULL;
+                    return -1;
                 }
-                break;
-            default:
-                assert(PyList_CheckExact(parent));
-                PyList_SET_ITEM(parent, task->idx, obj);
-        }
+            } else {
+                /* Pop the temporary item and set proper key and value. */
+                PyObject *last_item = PyObject_CallMethod(parent, "popitem", NULL);
+                PyObject *last_key = PyTuple_GetItem(last_item, 0);
+                if (PyDict_SetItem(parent, last_key, obj) < 0) {
+                    Py_DECREF(obj);
+                    return -1;
+                }
+            }
+            break;
+        case VALKEY_REPLY_SET:
+            assert(PyAnySet_CheckExact(parent));
+            if (PySet_Add(parent, obj) < 0) {
+                Py_DECREF(obj);
+                return -1;
+            }
+            break;
+        default:
+            assert(PyList_CheckExact(parent));
+            PyList_SET_ITEM(parent, task->idx, obj);
+    }
+    return 0;
+}
+
+static int tryParentize_ListOnly(const valkeyReadTask *task, PyObject *obj, PyObject *parent) {
+    switch (task->parent->type) {
+        case VALKEY_REPLY_MAP:
+            if (task->idx % 2 == 0) {
+                /* Set a temporary item to save the object as a key. */
+                PyObject *t = PyTuple_New(2);
+                PyTuple_SET_ITEM(t, 0, obj);
+                PyTuple_SET_ITEM(t, 1, Py_None);
+                PyList_Append(parent, t);
+                Py_DECREF(t);
+            } else {
+                /* Pop the temporary item and set proper key and value. */
+                PyObject *last_item = PyObject_CallMethod(parent, "pop", NULL);
+                PyTuple_SET_ITEM(last_item, 1, obj);
+                PyList_Append(parent, last_item);
+            }
+            break;
+        default:
+            assert(PyList_CheckExact(parent));
+            PyList_SET_ITEM(parent, task->idx, obj);
+    }
+    return 0;
+}
+
+static void *tryParentize(const valkeyReadTask *task, PyObject *obj) {
+    libvalkey_ReaderObject *self = (libvalkey_ReaderObject*)task->privdata;
+    if (task && task->parent) {
+        PyObject *parent = (PyObject*)task->parent->obj;
+        int res = self->listOnly
+            ? tryParentize_ListOnly(task, obj, parent)
+            : tryParentize_impl(task, obj, parent);
+        if (res < 0)
+            return NULL;
     }
     return obj;
 }
@@ -167,16 +200,24 @@ static void *createStringObject(const valkeyReadTask *task, char *str, size_t le
 }
 
 static void *createArrayObject(const valkeyReadTask *task, size_t elements) {
+    libvalkey_ReaderObject *self = (libvalkey_ReaderObject*)task->privdata;
     PyObject *obj;
-    switch (task->type) {
-        case VALKEY_REPLY_MAP:
-            obj = PyDict_New();
-            break;
-        case VALKEY_REPLY_SET:
-            obj = PySet_New(NULL);
-            break;
-        default:
-            obj = PyList_New(elements);
+    if (self->listOnly) {
+        /* For map, don't preallocate listand use append later. */
+        if (task->type == VALKEY_REPLY_MAP)
+            elements = 0;
+        obj = PyList_New(elements);
+    } else {
+        switch (task->type) {
+            case VALKEY_REPLY_MAP:
+                obj = PyDict_New();
+                break;
+            case VALKEY_REPLY_SET:
+                obj = PySet_New(NULL);
+                break;
+            default:
+                obj = PyList_New(elements);
+        }
     }
     return tryParentize(task, obj);
 }
@@ -288,15 +329,24 @@ static int _Reader_set_encoding(libvalkey_ReaderObject *self, char *encoding, ch
 }
 
 static int Reader_init(libvalkey_ReaderObject *self, PyObject *args, PyObject *kwds) {
-    static char *kwlist[] = { "protocolError", "replyError", "encoding", "errors", "notEnoughData", NULL };
+    static char *kwlist[] = {
+        "protocolError",
+        "replyError",
+        "encoding",
+        "errors",
+        "notEnoughData",
+        "listOnly",
+        NULL,
+    };
     PyObject *protocolErrorClass = NULL;
     PyObject *replyErrorClass = NULL;
     PyObject *notEnoughData = NULL;
     char *encoding = NULL;
     char *errors = NULL;
+    int listOnly = 0;
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "|OOzzO", kwlist,
-        &protocolErrorClass, &replyErrorClass, &encoding, &errors, &notEnoughData))
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "|OOzzOp", kwlist,
+        &protocolErrorClass, &replyErrorClass, &encoding, &errors, &notEnoughData, &listOnly))
             return -1;
 
     if (protocolErrorClass)
@@ -313,6 +363,8 @@ static int Reader_init(libvalkey_ReaderObject *self, PyObject *args, PyObject *k
 
         Py_INCREF(self->notEnoughDataObject);
     }
+
+    self->listOnly = listOnly;
 
     return _Reader_set_encoding(self, encoding, errors);
 }
@@ -331,6 +383,7 @@ static PyObject *Reader_new(PyTypeObject *type, PyObject *args, PyObject *kwds) 
         self->shouldDecode = 1;
         self->protocolErrorClass = LIBVALKEY_STATE->VkErr_ProtocolError;
         self->replyErrorClass = LIBVALKEY_STATE->VkErr_ReplyError;
+        self->listOnly = 0;
         Py_INCREF(self->protocolErrorClass);
         Py_INCREF(self->replyErrorClass);
         Py_INCREF(self->notEnoughDataObject);

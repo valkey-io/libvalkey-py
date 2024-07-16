@@ -1,9 +1,18 @@
 import libvalkey
 import pytest
 
-@pytest.fixture()
-def reader():
-  return libvalkey.Reader()
+@pytest.fixture(params=[True, False])
+def reader(request):
+  class TestReader(libvalkey.Reader):
+    def __init__(self, *args, **kwargs):
+      super().__init__(*args, **kwargs)
+      self.__listOnly = kwargs["listOnly"]
+
+    @property
+    def listOnly(self):
+      return self.__listOnly
+
+  return TestReader(listOnly=request.param)
 
 # def reply():
 #   return reader.gets()
@@ -135,12 +144,22 @@ def test_none(reader):
   assert reader.gets() is None
 
 def test_set(reader):
-  reader.feed(b"~3\r\n+tangerine\r\n_\r\n,10.5\r\n")
-  assert {b"tangerine", None, 10.5} == reader.gets()
+    reader.feed(b"~3\r\n+tangerine\r\n_\r\n,10.5\r\n")
+    expected = (
+      [b"tangerine", None, 10.5]
+      if reader.listOnly
+      else {b"tangerine", None, 10.5}
+    )
+    assert expected == reader.gets()
 
 def test_dict(reader):
   reader.feed(b"%2\r\n+radius\r\n,4.5\r\n+diameter\r\n:9\r\n")
-  assert {b"radius": 4.5, b"diameter": 9} == reader.gets()
+  expected = (
+      [(b"radius", 4.5), (b"diameter", 9)]
+      if reader.listOnly
+      else {b"radius": 4.5, b"diameter": 9}
+  )
+  assert expected == reader.gets()
 
 def test_vector(reader):
   reader.feed(b">4\r\n+pubsub\r\n+message\r\n+channel\r\n+message\r\n")
