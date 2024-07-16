@@ -67,23 +67,25 @@ PyTypeObject libvalkey_ReaderType = {
     Reader_new,                   /*tp_new */
 };
 
-static int tryParentize_impl(const valkeyReadTask *task, PyObject *obj, PyObject *parent) {
+static int tryParentize_impl(const valkeyReadTask *task, PyObject *obj,
+                             PyObject *parent, libvalkey_ReaderObject *self) {
     switch (task->parent->type) {
         case VALKEY_REPLY_MAP:
             if (task->idx % 2 == 0) {
-                /* Set a temporary item to save the object as a key. */
-                if (PyDict_SetItem(parent, obj, Py_None) < 0) {
-                    Py_DECREF(obj);
-                    return -1;
-                }
+                /* Save the object as a key. */
+                self->pendingObject = obj;
             } else {
-                /* Pop the temporary item and set proper key and value. */
-                PyObject *last_item = PyObject_CallMethod(parent, "popitem", NULL);
-                PyObject *last_key = PyTuple_GetItem(last_item, 0);
-                if (PyDict_SetItem(parent, last_key, obj) < 0) {
+                if (self->pendingObject == NULL) {
                     Py_DECREF(obj);
                     return -1;
                 }
+                if (PyDict_SetItem(parent, self->pendingObject, obj) < 0) {
+                    Py_DECREF(obj);
+                    Py_DECREF(self->pendingObject);
+                    self->pendingObject = NULL;
+                    return -1;
+                }
+                self->pendingObject = NULL;
             }
             break;
         case VALKEY_REPLY_SET:
@@ -100,21 +102,23 @@ static int tryParentize_impl(const valkeyReadTask *task, PyObject *obj, PyObject
     return 0;
 }
 
-static int tryParentize_ListOnly(const valkeyReadTask *task, PyObject *obj, PyObject *parent) {
+static int tryParentize_ListOnly(const valkeyReadTask *task, PyObject *obj,
+                                 PyObject *parent, libvalkey_ReaderObject *self) {
     switch (task->parent->type) {
         case VALKEY_REPLY_MAP:
             if (task->idx % 2 == 0) {
                 /* Set a temporary item to save the object as a key. */
-                PyObject *t = PyTuple_New(2);
-                PyTuple_SET_ITEM(t, 0, obj);
-                PyTuple_SET_ITEM(t, 1, Py_None);
-                PyList_Append(parent, t);
-                Py_DECREF(t);
+                self->pendingObject = PyTuple_New(2);
+                PyTuple_SET_ITEM(self->pendingObject, 0, obj);
             } else {
-                /* Pop the temporary item and set proper key and value. */
-                PyObject *last_item = PyObject_CallMethod(parent, "pop", NULL);
-                PyTuple_SET_ITEM(last_item, 1, obj);
-                PyList_Append(parent, last_item);
+                if (self->pendingObject == NULL) {
+                    Py_DECREF(obj);
+                    return -1;
+                }
+                PyTuple_SET_ITEM(self->pendingObject, 1, obj);
+                PyList_Append(parent, self->pendingObject);
+                Py_DECREF(self->pendingObject);
+                self->pendingObject = NULL;
             }
             break;
         default:
@@ -129,8 +133,8 @@ static void *tryParentize(const valkeyReadTask *task, PyObject *obj) {
     if (task && task->parent) {
         PyObject *parent = (PyObject*)task->parent->obj;
         int res = self->listOnly
-            ? tryParentize_ListOnly(task, obj, parent)
-            : tryParentize_impl(task, obj, parent);
+            ? tryParentize_ListOnly(task, obj, parent, self)
+            : tryParentize_impl(task, obj, parent, self);
         if (res < 0)
             return NULL;
     }
@@ -383,6 +387,7 @@ static PyObject *Reader_new(PyTypeObject *type, PyObject *args, PyObject *kwds) 
         self->shouldDecode = 1;
         self->protocolErrorClass = LIBVALKEY_STATE->VkErr_ProtocolError;
         self->replyErrorClass = LIBVALKEY_STATE->VkErr_ReplyError;
+        self->pendingObject = NULL;
         self->listOnly = 0;
         Py_INCREF(self->protocolErrorClass);
         Py_INCREF(self->replyErrorClass);

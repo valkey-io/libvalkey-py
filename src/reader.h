@@ -15,6 +15,8 @@ typedef struct {
     PyObject *notEnoughDataObject;
     int listOnly;
 
+    PyObject *pendingObject;
+
     /* Stores error object in between incomplete calls to #gets, in order to
      * only set the error once a full reply has been read. Otherwise, the
      * reader could get in an inconsistent state. */
