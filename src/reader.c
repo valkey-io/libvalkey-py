@@ -103,7 +103,10 @@ static int tryParentize_impl(const valkeyReadTask *task, PyObject *obj,
             break;
         default:
             assert(PyList_CheckExact(parent));
-            PyList_SET_ITEM(parent, task->idx, obj);
+            if (PyList_SetItem(parent, task->idx, obj) < 0) {
+                Py_DECREF(obj);
+                return -1;
+            }
     }
     return 0;
 }
@@ -115,6 +118,10 @@ static int tryParentize_ListOnly(const valkeyReadTask *task, PyObject *obj,
             if (task->idx % 2 == 0) {
                 /* Set a temporary item to save the object as a key. */
                 self->pendingObject = PyTuple_New(2);
+                if (self->pendingObject == NULL) {
+                    Py_DECREF(obj);
+                    return -1;
+                }
                 PyTuple_SET_ITEM(self->pendingObject, 0, obj);
             } else {
                 if (self->pendingObject == NULL) {
@@ -122,14 +129,19 @@ static int tryParentize_ListOnly(const valkeyReadTask *task, PyObject *obj,
                     return -1;
                 }
                 PyTuple_SET_ITEM(self->pendingObject, 1, obj);
-                PyList_Append(parent, self->pendingObject);
+                int res = PyList_Append(parent, self->pendingObject);
                 Py_DECREF(self->pendingObject);
                 self->pendingObject = NULL;
+                if (res < 0)
+                    return -1;
             }
             break;
         default:
             assert(PyList_CheckExact(parent));
-            PyList_SET_ITEM(parent, task->idx, obj);
+            if (PyList_SetItem(parent, task->idx, obj) < 0) {
+                Py_DECREF(obj);
+                return -1;
+            }
     }
     return 0;
 }
