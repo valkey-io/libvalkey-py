@@ -3,16 +3,7 @@ import pytest
 
 @pytest.fixture(params=[True, False])
 def reader(request):
-  class TestReader(libvalkey.Reader):
-    def __init__(self, *args, **kwargs):
-      super().__init__(*args, **kwargs)
-      self.__listOnly = kwargs["listOnly"]
-
-    @property
-    def listOnly(self):
-      return self.__listOnly
-
-  return TestReader(listOnly=request.param)
+  return libvalkey.Reader(listOnly=request.param)
 
 # def reply():
 #   return reader.gets()

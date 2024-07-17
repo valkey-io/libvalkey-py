@@ -14,6 +14,7 @@ static PyObject *Reader_getmaxbuf(libvalkey_ReaderObject *self);
 static PyObject *Reader_len(libvalkey_ReaderObject *self);
 static PyObject *Reader_has_data(libvalkey_ReaderObject *self);
 static PyObject *Reader_set_encoding(libvalkey_ReaderObject *self, PyObject *args, PyObject *kwds);
+static PyObject *Reader_listOnly(PyObject *self, void *closure);
 
 static PyMethodDef libvalkey_ReaderMethods[] = {
     {"feed", (PyCFunction)Reader_feed, METH_VARARGS, NULL },
@@ -24,6 +25,11 @@ static PyMethodDef libvalkey_ReaderMethods[] = {
     {"has_data", (PyCFunction)Reader_has_data, METH_NOARGS, NULL },
     {"set_encoding", (PyCFunction)Reader_set_encoding, METH_VARARGS | METH_KEYWORDS, NULL },
     { NULL }  /* Sentinel */
+};
+
+static PyGetSetDef libvalkey_ReaderGetSet[] = {
+    {"listOnly", (getter)Reader_listOnly, NULL, NULL, NULL},
+    {NULL}  /* Sentinel */
 };
 
 PyTypeObject libvalkey_ReaderType = {
@@ -56,7 +62,7 @@ PyTypeObject libvalkey_ReaderType = {
     0,                            /*tp_iternext */
     libvalkey_ReaderMethods,        /*tp_methods */
     0,                            /*tp_members */
-    0,                            /*tp_getset */
+    libvalkey_ReaderGetSet,        /*tp_getset */
     0,                            /*tp_base */
     0,                            /*tp_dict */
     0,                            /*tp_descr_get */
@@ -529,4 +535,11 @@ static PyObject *Reader_set_encoding(libvalkey_ReaderObject *self, PyObject *arg
 
     Py_RETURN_NONE;
 
+}
+
+static PyObject *Reader_listOnly(PyObject *obj, void *closure) {
+    libvalkey_ReaderObject *self = (libvalkey_ReaderObject*)obj;
+    PyObject *result = PyBool_FromLong(self->listOnly);
+    Py_INCREF(result);
+    return result;
 }
