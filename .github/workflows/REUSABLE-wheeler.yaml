@@ -32,12 +32,12 @@ jobs:
 
        - name: Set up QEMU
          if: runner.os == 'Linux'
-         uses: docker/setup-qemu-action@v2
+         uses: docker/setup-qemu-action@v3
          with:
            platforms: all
 
        - name: Build wheels
-         uses: pypa/cibuildwheel@v2.16.2
+         uses: pypa/cibuildwheel@v2.19.2
          env:
            # configure cibuildwheel to build native archs ('auto'), and some
            # emulated ones
@@ -72,8 +72,11 @@ jobs:
      # needs: ['build_wheels', 'build_sdist']
      needs: ['build_wheels', 'build_sdist']
      runs-on: ubuntu-latest
+     environment: pypi
+     permissions:
+       id-token: write
      steps:
-       - uses: actions/setup-python@v4
+       - uses: actions/setup-python@v5
          with:
            python-version: 3.9
        - name: Install tools
@@ -104,6 +107,3 @@ jobs:
           cp -R artifacts/sdist/* dist
        - name: Publish to Pypi
          uses: pypa/gh-action-pypi-publish@release/v1
-         with:
-           user: __token__
-           password: ${{ secrets.PYPI_API_TOKEN }}
