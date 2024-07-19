@@ -9,8 +9,8 @@ on:
 jobs:
   update_release_draft:
     permissions:
-      pull-requests: write  #  to add label to PR (release-drafter/release-drafter)
-      contents: write  #  to create a github release (release-drafter/release-drafter)
+      pull-requests: write #  to add label to PR (release-drafter/release-drafter)
+      contents: write #  to create a github release (release-drafter/release-drafter)
 
     runs-on: ubuntu-latest
     steps:
@@ -18,6 +18,6 @@ jobs:
       - uses: release-drafter/release-drafter@v5
         with:
           # (Optional) specify config name to use, relative to .github/. Default: release-drafter.yml
-           config-name: release-drafter-config.yml
+          config-name: release-drafter-config.yml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
