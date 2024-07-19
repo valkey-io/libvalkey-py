@@ -13,7 +13,6 @@ jobs:
     uses: ./.github/workflows/REUSABLE-wheeler.yaml
     with:
       release: true
-    environment: pypi
     permissions:
       id-token: write
     secrets: inherit
