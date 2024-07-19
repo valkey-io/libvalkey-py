@@ -1,9 +1,8 @@
 name: Publish tag to Pypi
 on:
-  workflow_dispatch:
-  push:
-    tags:
-      - 'v[0-9]+.[0-9]+.[0-9]+'
+  release:
+    types: [published]
+
 permissions:
   contents: read #  to fetch code (actions/checkout)
 
@@ -14,4 +13,7 @@ jobs:
     uses: ./.github/workflows/REUSABLE-wheeler.yaml
     with:
       release: true
+    environment: pypi
+    permissions:
+      id-token: write
     secrets: inherit
