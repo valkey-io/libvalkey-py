@@ -21,7 +21,7 @@ class Reader:
         encoding: Optional[str] = ...,
         errors: Optional[str] = ...,
         notEnoughData: Any = ...,
-        listOnly: bool = ...,
+        convertSetsToLists: bool = ...,
     ) -> None: ...
 
     def feed(
