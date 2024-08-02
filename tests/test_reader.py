@@ -3,7 +3,7 @@ import pytest
 
 @pytest.fixture(params=[True, False])
 def reader(request):
-  return libvalkey.Reader(listOnly=request.param)
+  return libvalkey.Reader(convertSetsToLists=request.param)
 
 # def reply():
 #   return reader.gets()
@@ -138,54 +138,47 @@ def test_set(reader):
     reader.feed(b"~3\r\n+tangerine\r\n_\r\n,10.5\r\n")
     expected = (
       [b"tangerine", None, 10.5]
-      if reader.listOnly
+      if reader.convertSetsToLists
       else {b"tangerine", None, 10.5}
     )
     assert expected == reader.gets()
 
 def test_dict(reader):
   reader.feed(b"%2\r\n+radius\r\n,4.5\r\n+diameter\r\n:9\r\n")
-  expected = (
-      [(b"radius", 4.5), (b"diameter", 9)]
-      if reader.listOnly
-      else {b"radius": 4.5, b"diameter": 9}
-  )
-  assert expected == reader.gets()
+  assert {b"radius": 4.5, b"diameter": 9} == reader.gets()
 
 def test_set_with_nested_dict(reader):
   reader.feed(b"~2\r\n+tangerine\r\n%1\r\n+a\r\n:1\r\n")
-  if reader.listOnly:
-    assert [b"tangerine", [(b"a", 1)]] == reader.gets()
+  if reader.convertSetsToLists:
+    assert [b"tangerine", {b"a": 1}] == reader.gets()
   else:
     with pytest.raises(TypeError):
       reader.gets()
 
 def test_dict_with_nested_set(reader):
   reader.feed(b"%1\r\n+a\r\n~2\r\n:1\r\n:2\r\n")
-  expected = (
-      [(b"a", [1, 2])]
-      if reader.listOnly
-      else {b"a": {1, 2}}
-  )
+  expected: dict[bytes, set[int] | list[int]] = {b"a": {1, 2}}
+  if reader.convertSetsToLists:
+    expected[b"a"] = list(expected[b"a"])
   assert expected == reader.gets()
 
 def test_map_inside_list(reader):
   reader.feed(b"*1\r\n%1\r\n+a\r\n:1\r\n")
-  expected = (
-      [[(b"a", 1)]]
-      if reader.listOnly
-      else [{b"a": 1}]
-  )
-  assert expected == reader.gets()
+  assert [{b"a": 1}] == reader.gets()
 
 def test_map_inside_set(reader):
   reader.feed(b"~1\r\n%1\r\n+a\r\n:1\r\n")
-  if reader.listOnly:
-    assert [[(b"a", 1)]] == reader.gets()
+  if reader.convertSetsToLists:
+    assert [{b"a": 1}] == reader.gets()
   else:
     # Map inside set is not allowed in Python
     with pytest.raises(TypeError):
       reader.gets()
+
+def test_set_as_map_key(reader):
+  reader.feed(b"%1\r\n~1\r\n:1\r\n:2\r\n")
+  with pytest.raises(TypeError):
+    reader.gets()
 
 def test_vector(reader):
   reader.feed(b">4\r\n+pubsub\r\n+message\r\n+channel\r\n+message\r\n")

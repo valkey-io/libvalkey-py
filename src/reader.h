@@ -13,7 +13,7 @@ typedef struct {
     PyObject *protocolErrorClass;
     PyObject *replyErrorClass;
     PyObject *notEnoughDataObject;
-    int listOnly;
+    int convertSetsToLists;
 
     PyObject *pendingObject;
 
