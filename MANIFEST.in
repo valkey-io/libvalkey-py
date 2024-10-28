@@ -3,6 +3,7 @@ include MANIFEST.in
 include README.md
 include src/*.[ch]
 include vendor/libvalkey/COPYING
+include vendor/libvalkey/include/valkey/*.h
 include vendor/libvalkey/src/*.[ch]
 graft tests
 global-exclude __pycache__
