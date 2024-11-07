@@ -87,13 +87,13 @@ static void *tryParentize(const valkeyReadTask *task, PyObject *obj) {
                         Py_DECREF(obj);
                         return NULL;
                     }
-                    if (PyDict_SetItem(parent, self->pendingObject, obj) < 0) {
-                        Py_DECREF(obj);
-                        Py_DECREF(self->pendingObject);
-                        self->pendingObject = NULL;
+                    int x = PyDict_SetItem(parent, self->pendingObject, obj);
+                    Py_DECREF(obj);
+                    Py_DECREF(self->pendingObject);
+                    self->pendingObject = NULL;
+                    if (x < 0) {
                         return NULL;
                     }
-                    self->pendingObject = NULL;
                 }
                 break;
             case VALKEY_REPLY_SET:
