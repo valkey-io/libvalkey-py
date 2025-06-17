@@ -50,10 +50,10 @@ jobs:
         run: |
           python setup.py bdist_wheel
 
-  # This is a noop job that is only needed for Github settings of the project.
-  # Github doesn't allow requiring all the checks and instead makes you specify
+  # This is a noop job that is only needed for GitHub settings of the project.
+  # GitHub doesn't allow requiring all the checks and instead makes you specify
   # all the jobs one by one. "run-tests" however is a matrix job and specifying
-  # all of its possible items is tedious. So we add this job to make Github happy.
+  # all of its possible items is tedious. So we add this job to make GitHub happy.
   verify_tests_succeeded:
     name: Verify that tests succeeded
     runs-on: ubuntu-latest
