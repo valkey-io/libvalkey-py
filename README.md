@@ -92,9 +92,7 @@ Decoding of bulk data will be attempted using the specified encoding and
 error handler. If the error handler is `'strict'` (the default), a
 `UnicodeDecodeError` is raised when data cannot be dedcoded. This is identical
 to Python's default behavior. Other valid values to `errors` include
-`'replace'`, `'ignore'`, and `'backslashreplace'`. More information on the
-behavior of these error handlers can be found
-[here](https://docs.python.org/3/howto/unicode.html#the-string-type).
+`'replace'`, `'ignore'`, and `'backslashreplace'`. See [Unicode HOWTO: The String Type](https://docs.python.org/3/howto/unicode.html#the-string-type) for more information on the behavior of these error handlers.
 
 
 When the specified encoding cannot be found, a `LookupError` will be raised
