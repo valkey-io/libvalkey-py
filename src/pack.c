@@ -1,4 +1,5 @@
 #include "pack.h"
+#include "sds.h"
 
 #ifndef _MSC_VER
 #include <valkey/valkey.h>
