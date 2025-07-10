@@ -23,6 +23,7 @@ def get_sources():
     libvalkey_sources = (
         "alloc",
         "async",
+        "conn",
         "dict",
         "net",
         "read",
@@ -40,9 +41,7 @@ def get_linker_args():
     if "win32" in sys.platform or "darwin" in sys.platform:
         return []
     else:
-        return [
-            "-Wl,-Bsymbolic",
-        ]
+        return ["-Wl,-Bsymbolic"]
 
 
 def get_compiler_args():
@@ -54,9 +53,7 @@ def get_compiler_args():
 
 def get_libraries():
     if "win32" in sys.platform:
-        return [
-            "ws2_32",
-        ]
+        return ["ws2_32"]
     else:
         return []
 
@@ -67,7 +64,14 @@ ext = Extension(
     extra_compile_args=get_compiler_args(),
     extra_link_args=get_linker_args(),
     libraries=get_libraries(),
-    include_dirs=["vendor/libvalkey/include", "vendor/libvalkey/include/valkey"],
+    include_dirs=[
+        "vendor/libvalkey/include",
+        "vendor/libvalkey/include/valkey",
+        # We need to include the src directory because we are building libvalkey
+        # from source and not using the pre-built library. Therefore, we need to
+        # add the internal dependencies.
+        "vendor/libvalkey/src",
+    ],
 )
 
 setup(
