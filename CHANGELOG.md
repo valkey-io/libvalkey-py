@@ -31,7 +31,7 @@
 ### 1.0.1 (2019-11-13)
 
 * Permit all allowed values of codec errors (see #86)
-* BUGFIX: READEME.md has UTF-8 characters, setup.py will fail on systems
+* BUGFIX: README.md has UTF-8 characters, setup.py will fail on systems
           where the locale is not UTF-8. (see #89)
 
 ### 1.0.0 (2019-01-20)
