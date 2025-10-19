@@ -30,7 +30,6 @@ boolean
 customizable
 dataset
 de
-dedcoded
 extensibility
 gcc
 gevent

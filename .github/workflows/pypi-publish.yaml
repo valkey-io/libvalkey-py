@@ -1,4 +1,4 @@
-name: Publish tag to Pypi
+name: Publish tag to PyPI
 on:
   release:
     types: [published]
@@ -59,7 +59,7 @@ jobs:
           path: ./wheelhouse/*.whl
 
   publish:
-    name: Pypi publish
+    name: PyPI publish
     needs: ['build_sdist', 'build_wheels']
     runs-on: ubuntu-latest
     environment: pypi
@@ -89,5 +89,5 @@ jobs:
           cp -R artifacts/linux/* dist
           cp -R artifacts/macos/* dist
           cp -R artifacts/sdist/* dist
-      - name: Publish to Pypi
+      - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
