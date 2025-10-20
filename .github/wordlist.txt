@@ -4,6 +4,7 @@ CAS
 Customizable
 ElastiCache
 FPM
+HOWTO
 IANA
 Kops
 LRANGE
