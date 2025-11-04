@@ -1,8 +1,12 @@
 import gc
 
+import pytest
+
 import libvalkey
 
 
+@pytest.mark.iterations(1)
+@pytest.mark.thread_unsafe
 def test_reader_gc():
     class A:
         def __init__(self):

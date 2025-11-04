@@ -2,6 +2,7 @@ black==24.3.0
 flake8==4.0.1
 isort==5.10.1
 pytest>=7.0.0
+pytest-run-parallel>=0.7.1
 setuptools
 vulture>=2.3.0
 wheel>=0.30.0

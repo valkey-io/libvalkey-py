@@ -174,6 +174,8 @@ def test_dict(reader):
     assert {b"radius": 4.5, b"diameter": 9} == reader.gets()
 
 
+@pytest.mark.iterations(1)
+@pytest.mark.thread_unsafe
 def test_set_with_nested_dict(reader):
     reader.feed(b"~2\r\n+tangerine\r\n%1\r\n+a\r\n:1\r\n")
     if reader.convertSetsToLists:
@@ -196,6 +198,8 @@ def test_map_inside_list(reader):
     assert [{b"a": 1}] == reader.gets()
 
 
+@pytest.mark.iterations(1)
+@pytest.mark.thread_unsafe
 def test_map_inside_set(reader):
     reader.feed(b"~1\r\n%1\r\n+a\r\n:1\r\n")
     if reader.convertSetsToLists:
@@ -206,6 +210,8 @@ def test_map_inside_set(reader):
             reader.gets()
 
 
+@pytest.mark.iterations(1)
+@pytest.mark.thread_unsafe
 def test_set_as_map_key(reader):
     reader.feed(b"%1\r\n~1\r\n:1\r\n:2\r\n")
     with pytest.raises(TypeError):
@@ -388,6 +394,8 @@ def test_feed_bytearray(reader):
     assert b"ok" == reader.gets()
 
 
+@pytest.mark.iterations(1)
+@pytest.mark.thread_unsafe
 def test_maxbuf(reader):
     defaultmaxbuf = reader.getmaxbuf()
     reader.setmaxbuf(0)
@@ -400,6 +408,8 @@ def test_maxbuf(reader):
         reader.setmaxbuf(-4)
 
 
+@pytest.mark.iterations(1)
+@pytest.mark.thread_unsafe
 def test_len(reader):
     assert reader.len() == 0
     data = b"+ok\r\n"
@@ -416,6 +426,8 @@ def test_len(reader):
     assert reader.len() == 5
 
 
+@pytest.mark.iterations(1)
+@pytest.mark.thread_unsafe
 def test_reader_has_data(reader):
     assert reader.has_data() is False
     data = b"+ok\r\n"
