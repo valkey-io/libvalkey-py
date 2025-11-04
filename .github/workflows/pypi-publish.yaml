@@ -21,7 +21,7 @@ jobs:
       - name: Build sdist
         run: |
           python3 setup.py sdist
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: source-dist
           path: ./dist/*.tar.gz
@@ -53,7 +53,7 @@ jobs:
           # emulated ones
           CIBW_ARCHS_LINUX: auto aarch64 ppc64le s390x
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: ${{matrix.os}}-wheels
           path: ./wheelhouse/*.whl
