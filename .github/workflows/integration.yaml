@@ -42,7 +42,7 @@ jobs:
           cache-dependency-path: dev_requirements.txt
       - name: run tests
         run: |
-          pip install -U pip setuptools wheel
+          pip install --upgrade pip setuptools wheel
           pip install -r dev_requirements.txt
           python setup.py build_ext --inplace
           python -m pytest
