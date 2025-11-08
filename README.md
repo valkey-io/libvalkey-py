@@ -28,7 +28,7 @@ python -m pytest
 
 ### Requirements
 
-libvalkey-py requires **Python 3.8+**.
+libvalkey-py requires **Python 3.9+**.
 
 Make sure Python development headers are available when installing libvalkey-py.
 On Ubuntu/Debian systems, install them with `apt-get install python3-dev`.
