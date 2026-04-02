@@ -36,12 +36,12 @@ jobs:
           usesh: true
           sync: rsync
           copyback: false
-          prepare: pkg install -y bash curl python39
+          prepare: pkg install -y bash curl python310
           run: |
             curl -s https://bootstrap.pypa.io/get-pip.py -o get-pip.py
-            python3.9 get-pip.py
+            python3.10 get-pip.py
             /usr/local/bin/pip install -U pip setuptools wheel
             /usr/local/bin/pip install -r dev_requirements.txt
-            /usr/local/bin/python3.9 setup.py build_ext --inplace
-            python3.9 -m pytest
-            python3.9 setup.py bdist_wheel
+            /usr/local/bin/python3.10 setup.py build_ext --inplace
+            python3.10 -m pytest
+            python3.10 setup.py bdist_wheel
