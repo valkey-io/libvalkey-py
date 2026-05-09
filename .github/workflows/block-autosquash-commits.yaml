@@ -6,7 +6,7 @@ jobs:
   message-check:
     name: Block Autosquash Commits
 
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-slim
 
     steps:
       - name: Block Autosquash Commits
