@@ -3,7 +3,7 @@ on:
   pull_request:
 jobs:
   check-spelling:
-    runs-on: ubuntu-slim
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v6
