@@ -68,11 +68,11 @@ jobs:
     steps:
       - uses: actions/download-artifact@v8
         with:
-          name: ubuntu-20.04-wheels
+          name: ubuntu-slim-wheels
           path: artifacts/linux
       - uses: actions/download-artifact@v8
         with:
-          name: windows-2019-wheels
+          name: windows-latest-wheels
           path: artifacts/windows
       - uses: actions/download-artifact@v8
         with:
