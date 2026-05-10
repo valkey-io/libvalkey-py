@@ -4,7 +4,7 @@ on: pull_request
 
 jobs:
   forbid-merge-commits:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-slim
     steps:
       - name: Run Forbid Merge Commits Action
         uses: motlin/forbid-merge-commits-action@main

@@ -10,7 +10,7 @@ jobs:
 
   build_sdist:
     name: Build source dist
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-slim
     steps:
       - uses: actions/setup-python@v6
         with:
@@ -31,7 +31,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-20.04, windows-2019, macos-latest]
+        os: [ubuntu-slim, windows-latest, macos-latest]
     env:
       CIBW_ARCHS_MACOS: "x86_64 universal2 arm64"
       MACOSX_DEPLOYMENT_TARGET: "11.0"
@@ -61,18 +61,18 @@ jobs:
   publish:
     name: PyPI publish
     needs: ['build_sdist', 'build_wheels']
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-slim
     environment: pypi
     permissions:
       id-token: write
     steps:
       - uses: actions/download-artifact@v8
         with:
-          name: ubuntu-20.04-wheels
+          name: ubuntu-slim-wheels
           path: artifacts/linux
       - uses: actions/download-artifact@v8
         with:
-          name: windows-2019-wheels
+          name: windows-latest-wheels
           path: artifacts/windows
       - uses: actions/download-artifact@v8
         with:
