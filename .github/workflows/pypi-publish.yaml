@@ -61,7 +61,7 @@ jobs:
   publish:
     name: PyPI publish
     needs: ['build_sdist', 'build_wheels']
-    runs-on: ubuntu-slim
+    runs-on: ubuntu-latest
     environment: pypi
     permissions:
       id-token: write
