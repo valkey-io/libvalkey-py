@@ -31,7 +31,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-slim, windows-latest, macos-latest]
+        os: [ubuntu-latest, windows-latest, macos-latest]
     env:
       CIBW_ARCHS_MACOS: "x86_64 universal2 arm64"
       MACOSX_DEPLOYMENT_TARGET: "11.0"
@@ -68,7 +68,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@v8
         with:
-          name: ubuntu-slim-wheels
+          name: ubuntu-latest-wheels
           path: artifacts/linux
       - uses: actions/download-artifact@v8
         with:
