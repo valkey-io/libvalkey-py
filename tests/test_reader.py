@@ -406,14 +406,14 @@ def test_len(reader):
     reader.feed(data)
     assert reader.len() == len(data)
 
-    # libvalkey reallocates and removes unused buffer once
-    # there is at least 1K of not used data.
-    calls = int((1024 / len(data))) + 1
-    for i in range(calls):
+    # feed() compacts consumed bytes before appending; gets() leaves them
+    # in the buffer until the next feed().
+    for _ in range(3):
         reader.feed(data)
-        reader.gets()
+        assert reader.gets() == b"ok"
 
-    assert reader.len() == 5
+    # The buffer contains one consumed reply and one unread reply.
+    assert reader.len() == 2 * len(data)
 
 
 def test_reader_has_data(reader):
