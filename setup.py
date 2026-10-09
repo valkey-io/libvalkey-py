@@ -26,10 +26,12 @@ def get_sources():
         "async",
         "conn",
         "dict",
+        "dns",
         "net",
         "read",
         "sds",
         "sockcompat",
+        "timer",
         "valkey",
     )
     return sorted(
