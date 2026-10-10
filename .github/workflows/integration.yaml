@@ -25,25 +25,29 @@ jobs:
     strategy:
       max-parallel: 15
       matrix:
-        python-version: ['3.11', '3.12', '3.13', '3.14', '3.15', 'pypy-3.11']
+        python-version: ['3.11', '3.12', '3.13', '3.14', '3.15', 'pypy@3.11']
         os: ['ubuntu-slim', 'windows-latest', 'macos-latest']
       fail-fast: false
     env:
       ACTIONS_ALLOW_UNSECURE_COMMANDS: true
+      UV_PYTHON_PREFERENCE: only-managed
     name: Python ${{ matrix.python-version }} ${{matrix.os}}
     steps:
       - uses: actions/checkout@v7
         with:
           submodules: recursive
-      - uses: actions/setup-python@v7
+      - uses: astral-sh/setup-uv@v10.3.0
         with:
+          version: '0.13.0'
           python-version: ${{ matrix.python-version }}
-          cache: 'pip'
-          cache-dependency-path: dev_requirements.txt
+          activate-environment: true
+          no-project: true
+          enable-cache: true
+          cache-dependency-glob: dev_requirements.txt
       - name: run tests
         run: |
-          pip install -U pip setuptools wheel
-          pip install -r dev_requirements.txt
+          uv pip install -U setuptools wheel
+          uv pip install -r dev_requirements.txt
           python setup.py build_ext --inplace
           python -m pytest
       - name: build and install the wheel
