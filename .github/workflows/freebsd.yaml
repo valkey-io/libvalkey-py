@@ -24,7 +24,7 @@ jobs:
     timeout-minutes: 30
     env:
       ACTIONS_ALLOW_UNSECURE_COMMANDS: true
-    name: Python ${{ matrix.python-version }} FreeBSD
+    name: Python 3.11 FreeBSD
     steps:
       - uses: actions/checkout@v7
         with:
@@ -36,12 +36,12 @@ jobs:
           usesh: true
           sync: rsync
           copyback: false
-          prepare: pkg install -y bash curl python310
+          prepare: pkg install -y bash curl python311
           run: |
             curl -s https://bootstrap.pypa.io/get-pip.py -o get-pip.py
-            python3.10 get-pip.py
-            /usr/local/bin/pip install -U pip setuptools wheel
-            /usr/local/bin/pip install -r dev_requirements.txt
-            /usr/local/bin/python3.10 setup.py build_ext --inplace
-            python3.10 -m pytest
-            python3.10 setup.py bdist_wheel
+            python3.11 get-pip.py
+            python3.11 -m pip install -U pip setuptools wheel
+            python3.11 -m pip install -r dev_requirements.txt
+            /usr/local/bin/python3.11 setup.py build_ext --inplace
+            python3.11 -m pytest
+            python3.11 setup.py bdist_wheel
