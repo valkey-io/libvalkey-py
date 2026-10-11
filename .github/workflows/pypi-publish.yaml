@@ -7,6 +7,7 @@ permissions:
   contents: read #  to fetch code (actions/checkout)
 
 env:
+  CIBW_ENABLE: pypy
   # The extension does not yet support running with the GIL disabled.
   CIBW_SKIP: "cp3??t-*"
 
@@ -65,6 +66,16 @@ jobs:
           - {arch: aarch64, os: ubuntu-24.04-arm, qemu: false}
           - {arch: ppc64le, os: ubuntu-latest, qemu: true}
           - {arch: s390x, os: ubuntu-latest, qemu: true}
+        # Linux PyPy builds are available only for manylinux on these targets.
+        include:
+          - python: pp311
+            target: {arch: x86_64, os: ubuntu-latest, qemu: false}
+          - python: pp312
+            target: {arch: x86_64, os: ubuntu-latest, qemu: false}
+          - python: pp311
+            target: {arch: aarch64, os: ubuntu-24.04-arm, qemu: false}
+          - python: pp312
+            target: {arch: aarch64, os: ubuntu-24.04-arm, qemu: false}
     env:
       CIBW_BUILD: ${{ matrix.python }}-*
       CIBW_ARCHS_LINUX: ${{ matrix.target.arch }}
