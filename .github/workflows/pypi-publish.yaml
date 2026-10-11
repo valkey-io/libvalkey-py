@@ -6,6 +6,10 @@ on:
 permissions:
   contents: read #  to fetch code (actions/checkout)
 
+env:
+  # The extension does not yet support running with the GIL disabled.
+  CIBW_SKIP: "cp3??t-*"
+
 jobs:
 
   build_sdist:
@@ -30,8 +34,9 @@ jobs:
     name: Build wheels on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [windows-latest, macos-latest]
     env:
       CIBW_ARCHS_MACOS: "x86_64 universal2 arm64"
       MACOSX_DEPLOYMENT_TARGET: "11.0"
@@ -40,27 +45,51 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Set up QEMU
-        if: runner.os == 'Linux'
-        uses: docker/setup-qemu-action@v4
-        with:
-          platforms: all
-
       - name: Build wheels
         uses: pypa/cibuildwheel@v4.3.1
-        env:
-          # configure cibuildwheel to build native archs ('auto'), and some
-          # emulated ones
-          CIBW_ARCHS_LINUX: auto aarch64 ppc64le s390x
 
       - uses: actions/upload-artifact@v7
         with:
-          name: ${{matrix.os}}-wheels
+          name: wheels-${{ matrix.os }}
+          path: ./wheelhouse/*.whl
+
+  build_wheels_linux:
+    name: Build Linux wheels for ${{ matrix.python }} on ${{ matrix.target.arch }}
+    runs-on: ${{ matrix.target.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        python: [cp311, cp312, cp313, cp314, cp315]
+        target:
+          - {arch: x86_64, os: ubuntu-latest, qemu: false}
+          - {arch: aarch64, os: ubuntu-24.04-arm, qemu: false}
+          - {arch: ppc64le, os: ubuntu-latest, qemu: true}
+          - {arch: s390x, os: ubuntu-latest, qemu: true}
+    env:
+      CIBW_BUILD: ${{ matrix.python }}-*
+      CIBW_ARCHS_LINUX: ${{ matrix.target.arch }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - name: Set up QEMU
+        if: matrix.target.qemu
+        uses: docker/setup-qemu-action@v4
+        with:
+          platforms: ${{ matrix.target.arch }}
+
+      - name: Build wheels
+        uses: pypa/cibuildwheel@v4.3.1
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: wheels-linux-${{ matrix.python }}-${{ matrix.target.arch }}
           path: ./wheelhouse/*.whl
 
   publish:
     name: PyPI publish
-    needs: ['build_sdist', 'build_wheels']
+    needs: ['build_sdist', 'build_wheels', 'build_wheels_linux']
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
@@ -68,26 +97,12 @@ jobs:
     steps:
       - uses: actions/download-artifact@v8
         with:
-          name: ubuntu-latest-wheels
-          path: artifacts/linux
-      - uses: actions/download-artifact@v8
-        with:
-          name: windows-latest-wheels
-          path: artifacts/windows
-      - uses: actions/download-artifact@v8
-        with:
-          name: macos-latest-wheels
-          path: artifacts/macos
+          pattern: wheels-*
+          path: dist
+          merge-multiple: true
       - uses: actions/download-artifact@v8
         with:
           name: source-dist
-          path: artifacts/sdist
-      - name: unify wheel structure
-        run: |
-          mkdir dist
-          cp -R artifacts/windows/* dist
-          cp -R artifacts/linux/* dist
-          cp -R artifacts/macos/* dist
-          cp -R artifacts/sdist/* dist
+          path: dist
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
