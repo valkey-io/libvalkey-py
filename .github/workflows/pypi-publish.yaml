@@ -37,9 +37,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, macos-latest]
+        os: [windows-latest, macos-latest, windows-11-arm]
     env:
       CIBW_ARCHS_MACOS: "x86_64 universal2 arm64"
+      CIBW_ARCHS_WINDOWS: ${{ matrix.os == 'windows-11-arm' && 'ARM64' || 'auto' }}
+      # PyPy is not available for Windows ARM64.
+      CIBW_BUILD: ${{ matrix.os == 'windows-11-arm' && 'cp3*-win_arm64' || '*' }}
       MACOSX_DEPLOYMENT_TARGET: "11.0"
     steps:
       - uses: actions/checkout@v7

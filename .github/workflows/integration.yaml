@@ -27,6 +27,13 @@ jobs:
       matrix:
         python-version: ['3.11', '3.12', '3.13', '3.14', '3.15', 'pypy@3.11', 'pypy@3.12']
         os: ['ubuntu-slim', 'windows-latest', 'macos-latest']
+        # PyPy is not available for Windows ARM64.
+        include:
+          - {python-version: '3.11', os: windows-11-arm}
+          - {python-version: '3.12', os: windows-11-arm}
+          - {python-version: '3.13', os: windows-11-arm}
+          - {python-version: '3.14', os: windows-11-arm}
+          - {python-version: '3.15', os: windows-11-arm}
       fail-fast: false
     env:
       ACTIONS_ALLOW_UNSECURE_COMMANDS: true
@@ -44,6 +51,9 @@ jobs:
           no-project: true
           enable-cache: true
           cache-dependency-glob: dev_requirements.txt
+      - name: Verify native ARM64 interpreter
+        if: matrix.os == 'windows-11-arm'
+        run: python -c "import platform; assert platform.machine().lower() == 'arm64', platform.machine()"
       - name: run tests
         run: |
           uv pip install -U setuptools wheel
