@@ -2,6 +2,7 @@
 #include "libvalkey.h"
 
 #include <assert.h>
+#include <string.h>
 
 static void Reader_dealloc(libvalkey_ReaderObject *self);
 static int Reader_traverse(libvalkey_ReaderObject *self, visitproc visit, void *arg);
@@ -32,45 +33,23 @@ static PyGetSetDef libvalkey_ReaderGetSet[] = {
     {NULL}  /* Sentinel */
 };
 
-PyTypeObject libvalkey_ReaderType = {
-    PyVarObject_HEAD_INIT(NULL, 0)
-    MOD_LIBVALKEY ".Reader",        /*tp_name*/
-    sizeof(libvalkey_ReaderObject), /*tp_basicsize*/
-    0,                            /*tp_itemsize*/
-    (destructor)Reader_dealloc,   /*tp_dealloc*/
-    0,                            /*tp_print*/
-    0,                            /*tp_getattr*/
-    0,                            /*tp_setattr*/
-    0,                            /*tp_compare*/
-    0,                            /*tp_repr*/
-    0,                            /*tp_as_number*/
-    0,                            /*tp_as_sequence*/
-    0,                            /*tp_as_mapping*/
-    0,                            /*tp_hash */
-    0,                            /*tp_call*/
-    0,                            /*tp_str*/
-    0,                            /*tp_getattro*/
-    0,                            /*tp_setattro*/
-    0,                            /*tp_as_buffer*/
-    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_HAVE_GC, /*tp_flags*/
-    "Valkey protocol reader",    /*tp_doc */
-    (traverseproc)Reader_traverse,/*tp_traverse */
-    0,                            /*tp_clear */
-    0,                            /*tp_richcompare */
-    0,                            /*tp_weaklistoffset */
-    0,                            /*tp_iter */
-    0,                            /*tp_iternext */
-    libvalkey_ReaderMethods,        /*tp_methods */
-    0,                            /*tp_members */
-    libvalkey_ReaderGetSet,        /*tp_getset */
-    0,                            /*tp_base */
-    0,                            /*tp_dict */
-    0,                            /*tp_descr_get */
-    0,                            /*tp_descr_set */
-    0,                            /*tp_dictoffset */
-    (initproc)Reader_init,        /*tp_init */
-    0,                            /*tp_alloc */
-    Reader_new,                   /*tp_new */
+static PyType_Slot libvalkey_ReaderSlots[] = {
+    {Py_tp_dealloc, (void *)Reader_dealloc},
+    {Py_tp_traverse, (void *)Reader_traverse},
+    {Py_tp_methods, (void *)libvalkey_ReaderMethods},
+    {Py_tp_getset, (void *)libvalkey_ReaderGetSet},
+    {Py_tp_init, (void *)Reader_init},
+    {Py_tp_new, (void *)Reader_new},
+    {Py_tp_doc, (void *)"Valkey protocol reader"},
+    {0, NULL},
+};
+
+PyType_Spec libvalkey_ReaderSpec = {
+    MOD_LIBVALKEY ".Reader",        /* name */
+    sizeof(libvalkey_ReaderObject), /* basicsize */
+    0,                              /* itemsize */
+    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_HAVE_GC, /* flags */
+    libvalkey_ReaderSlots,
 };
 
 static void *tryParentize(const valkeyReadTask *task, PyObject *obj) {
@@ -245,7 +224,8 @@ static void Reader_dealloc(libvalkey_ReaderObject *self) {
     Py_CLEAR(self->replyErrorClass);
     Py_CLEAR(self->notEnoughDataObject);
 
-    ((PyObject *)self)->ob_type->tp_free((PyObject*)self);
+    freefunc tp_free = (freefunc)PyType_GetSlot(Py_TYPE((PyObject *)self), Py_tp_free);
+    tp_free((PyObject *)self);
 }
 
 static int Reader_traverse(libvalkey_ReaderObject *self, visitproc visit, void *arg) {
@@ -347,7 +327,7 @@ static int Reader_init(libvalkey_ReaderObject *self, PyObject *args, PyObject *k
 
 static PyObject *Reader_new(PyTypeObject *type, PyObject *args, PyObject *kwds) {
     libvalkey_ReaderObject *self;
-    self = (libvalkey_ReaderObject*)type->tp_alloc(type, 0);
+    self = (libvalkey_ReaderObject*)PyType_GenericAlloc(type, 0);
     if (self != NULL) {
         self->reader = valkeyReaderCreateWithFunctions(NULL);
         self->reader->fn = &libvalkey_ObjectFunctions;
