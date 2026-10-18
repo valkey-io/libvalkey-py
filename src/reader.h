@@ -7,7 +7,8 @@
 typedef struct {
     PyObject_HEAD
     valkeyReader *reader;
-    /* Copies owned by the reader; NULL encoding means "return bytes". */
+    /* sds strings owned by the reader, freed with sdsfree();
+     * NULL encoding means "return bytes". */
     char *encoding;
     char *errors;
     int shouldDecode;

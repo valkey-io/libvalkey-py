@@ -2,7 +2,18 @@
 #include "libvalkey.h"
 
 #include <assert.h>
-#include <string.h>
+
+#ifndef _MSC_VER
+#include "sds.h"
+#else
+/* Workaround for https://bugs.python.org/issue11717.
+ * <valkey/valkey.h> defines ssize_t which can conflict
+ * with Python's definition.
+ */
+typedef char *sds;
+extern sds sdsnew(const char *init);
+extern void sdsfree(sds s);
+#endif
 
 static void Reader_dealloc(libvalkey_ReaderObject *self);
 static int Reader_traverse(libvalkey_ReaderObject *self, visitproc visit, void *arg);
@@ -240,8 +251,8 @@ valkeyReplyObjectFunctions libvalkey_ObjectFunctions = {
 
 static void Reader_dealloc(libvalkey_ReaderObject *self) {
     PyObject_GC_UnTrack(self);
-    PyMem_Free(self->encoding);
-    PyMem_Free(self->errors);
+    sdsfree(self->encoding);
+    sdsfree(self->errors);
     valkeyReaderFree(self->reader);
     Py_CLEAR(self->protocolErrorClass);
     Py_CLEAR(self->replyErrorClass);
@@ -272,26 +283,12 @@ static int _Reader_set_exception(PyObject **target, PyObject *value) {
     return 1;
 }
 
-/* The strings from PyArg_ParseTuple's "z" format only live for the duration of
- * the call, so the reader has to keep its own copy. */
-static char *copy_string(const char *src) {
-    size_t len;
-    char *dst;
-
-    len = strlen(src) + 1;
-    dst = PyMem_Malloc(len);
-    if (dst == NULL) {
-        PyErr_NoMemory();
-        return NULL;
-    }
-    memcpy(dst, src, len);
-    return dst;
-}
-
 static int _Reader_set_encoding(libvalkey_ReaderObject *self, char *encoding, char *errors) {
     PyObject *codecs, *result;
-    char *encoding_copy = NULL;
-    char *errors_copy;
+    /* The strings from PyArg_ParseTuple's "z" format only live for the duration
+     * of the call, so the reader keeps its own copies. */
+    sds encoding_copy = NULL;
+    sds errors_copy;
 
     if (encoding) {  // validate that the encoding exists, raises LookupError if not
         codecs = PyImport_ImportModule("codecs");
@@ -316,19 +313,22 @@ static int _Reader_set_encoding(libvalkey_ReaderObject *self, char *encoding, ch
     }
 
     if (encoding) {
-        encoding_copy = copy_string(encoding);
-        if (encoding_copy == NULL)
+        encoding_copy = sdsnew(encoding);
+        if (encoding_copy == NULL) {
+            PyErr_NoMemory();
             return -1;
+        }
     }
 
-    errors_copy = copy_string(errors ? errors : "strict");
+    errors_copy = sdsnew(errors ? errors : "strict");
     if (errors_copy == NULL) {
-        PyMem_Free(encoding_copy);
+        sdsfree(encoding_copy);
+        PyErr_NoMemory();
         return -1;
     }
 
-    PyMem_Free(self->encoding);
-    PyMem_Free(self->errors);
+    sdsfree(self->encoding);
+    sdsfree(self->errors);
     self->encoding = encoding_copy;
     self->errors = errors_copy;
 
