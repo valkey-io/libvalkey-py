@@ -99,8 +99,9 @@ static void *tryParentize(const valkeyReadTask *task, PyObject *obj) {
             case VALKEY_REPLY_SET:
                 if (!self->convertSetsToLists) {
                     assert(PyAnySet_CheckExact(parent));
-                    if (PySet_Add(parent, obj) < 0) {
-                        Py_DECREF(obj);
+                    int x = PySet_Add(parent, obj);
+                    Py_DECREF(obj);
+                    if (x < 0) {
                         return NULL;
                     }
                     break;

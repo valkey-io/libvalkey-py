@@ -169,6 +169,16 @@ def test_set(reader):
     assert expected == reader.gets()
 
 
+def test_set_with_duplicate_members(reader):
+    reader.feed(b"~4\r\n+tangerine\r\n+tangerine\r\n,10.5\r\n,10.5\r\n")
+    expected = (
+        [b"tangerine", b"tangerine", 10.5, 10.5]
+        if reader.convertSetsToLists
+        else {b"tangerine", 10.5}
+    )
+    assert expected == reader.gets()
+
+
 def test_dict(reader):
     reader.feed(b"%2\r\n+radius\r\n,4.5\r\n+diameter\r\n:9\r\n")
     assert {b"radius": 4.5, b"diameter": 9} == reader.gets()
