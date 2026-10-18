@@ -334,6 +334,34 @@ def test_set_encoding_invalid_error_handler():
         r.set_encoding(encoding="utf-8", errors="unknown")
 
 
+def test_encoding_name_is_not_borrowed():
+    # The reader has to copy the encoding name: the string passed to the
+    # constructor is released as soon as it returns.
+    r = libvalkey.Reader(encoding="".join(["ut", "f-", "8"]))
+    # Keeping these alive makes the allocator reuse the freed name's memory.
+    decoys = ["".join(["x"] * 5) for _ in range(1000)]
+    assert decoys
+    r.feed(b"$3\r\nfoo\r\n")
+    assert r.gets() == "foo"
+
+
+def test_errors_name_is_not_borrowed():
+    r = libvalkey.Reader(encoding="ascii", errors="".join(["ig", "nore"]))
+    decoys = ["".join(["x"] * 5) for _ in range(1000)]
+    assert decoys
+    r.feed(b"+\xff\xfe\r\n")
+    assert r.gets() == ""
+
+
+def test_set_encoding_names_are_not_borrowed():
+    r = libvalkey.Reader()
+    r.set_encoding(encoding="".join(["ut", "f-", "8"]), errors="".join(["ig", "nore"]))
+    decoys = ["".join(["x"] * 5) for _ in range(1000)]
+    assert decoys
+    r.feed(b"+\xffvalue\r\n")
+    assert r.gets() == "value"
+
+
 def test_null_multi_bulk(reader):
     reader.feed(b"*-1\r\n")
     assert reader.gets() is None
