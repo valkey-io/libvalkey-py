@@ -27,7 +27,7 @@ typedef struct {
     } error;
 } libvalkey_ReaderObject;
 
-extern PyTypeObject libvalkey_ReaderType;
+extern PyType_Spec libvalkey_ReaderSpec;
 extern valkeyReplyObjectFunctions libvalkey_ObjectFunctions;
 
 #endif
