@@ -3,6 +3,18 @@
 
 #include <assert.h>
 
+#ifndef _MSC_VER
+#include "sds.h"
+#else
+/* Workaround for https://bugs.python.org/issue11717.
+ * <valkey/valkey.h> defines ssize_t which can conflict
+ * with Python's definition.
+ */
+typedef char *sds;
+extern sds sdsnew(const char *init);
+extern void sdsfree(sds s);
+#endif
+
 static void Reader_dealloc(libvalkey_ReaderObject *self);
 static int Reader_traverse(libvalkey_ReaderObject *self, visitproc visit, void *arg);
 static int Reader_init(libvalkey_ReaderObject *self, PyObject *args, PyObject *kwds);
@@ -239,8 +251,8 @@ valkeyReplyObjectFunctions libvalkey_ObjectFunctions = {
 
 static void Reader_dealloc(libvalkey_ReaderObject *self) {
     PyObject_GC_UnTrack(self);
-    // we don't need to free self->encoding as the buffer is managed by Python
-    // https://docs.python.org/3/c-api/arg.html#strings-and-buffers
+    sdsfree(self->encoding);
+    sdsfree(self->errors);
     valkeyReaderFree(self->reader);
     Py_CLEAR(self->protocolErrorClass);
     Py_CLEAR(self->replyErrorClass);
@@ -273,6 +285,10 @@ static int _Reader_set_exception(PyObject **target, PyObject *value) {
 
 static int _Reader_set_encoding(libvalkey_ReaderObject *self, char *encoding, char *errors) {
     PyObject *codecs, *result;
+    /* The strings from PyArg_ParseTuple's "z" format only live for the duration
+     * of the call, so the reader keeps its own copies. */
+    sds encoding_copy = NULL;
+    sds errors_copy;
 
     if (encoding) {  // validate that the encoding exists, raises LookupError if not
         codecs = PyImport_ImportModule("codecs");
@@ -283,9 +299,6 @@ static int _Reader_set_encoding(libvalkey_ReaderObject *self, char *encoding, ch
         if (!result)
             return -1;
         Py_DECREF(result);
-        self->encoding = encoding;
-    } else {
-        self->encoding = NULL;
     }
 
     if (errors) {   // validate that the error handler exists, raises LookupError if not
@@ -297,10 +310,27 @@ static int _Reader_set_encoding(libvalkey_ReaderObject *self, char *encoding, ch
         if (!result)
             return -1;
         Py_DECREF(result);
-        self->errors = errors;
-    } else {
-        self->errors = "strict";
     }
+
+    if (encoding) {
+        encoding_copy = sdsnew(encoding);
+        if (encoding_copy == NULL) {
+            PyErr_NoMemory();
+            return -1;
+        }
+    }
+
+    errors_copy = sdsnew(errors ? errors : "strict");
+    if (errors_copy == NULL) {
+        sdsfree(encoding_copy);
+        PyErr_NoMemory();
+        return -1;
+    }
+
+    sdsfree(self->encoding);
+    sdsfree(self->errors);
+    self->encoding = encoding_copy;
+    self->errors = errors_copy;
 
     return 0;
 }
@@ -355,7 +385,7 @@ static PyObject *Reader_new(PyTypeObject *type, PyObject *args, PyObject *kwds) 
         self->reader->privdata = self;
 
         self->encoding = NULL;
-        self->errors = "strict";  // default to "strict" to mimic Python
+        self->errors = NULL;
         self->notEnoughDataObject = Py_False;
         self->shouldDecode = 1;
         self->protocolErrorClass = LIBVALKEY_STATE->VkErr_ProtocolError;
