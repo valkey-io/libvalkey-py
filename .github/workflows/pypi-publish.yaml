@@ -63,7 +63,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python: [cp311, cp312, cp313, cp314, cp315]
+        # The CPython wheel is abi3 (cp311), so one build per architecture
+        # covers every supported version. CIBW_BUILD below shards by Python
+        # version, which disables cibuildwheel's own abi3 deduplication.
+        python: [cp311]
         target:
           - {arch: x86_64, os: ubuntu-latest, qemu: false}
           - {arch: aarch64, os: ubuntu-24.04-arm, qemu: false}

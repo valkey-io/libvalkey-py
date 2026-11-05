@@ -1,6 +1,8 @@
 #include "pack.h"
 #include "sds.h"
 
+#include <string.h>
+
 #ifndef _MSC_VER
 #include <valkey/valkey.h>
 #else
@@ -79,9 +81,12 @@ pack_command(PyObject *cmd)
         }
         else if (PyMemoryView_Check(item))
         {
-            Py_buffer *p_buf = PyMemoryView_GET_BUFFER(item);
-            tokens[i] = sdsnewlen(p_buf->buf, p_buf->len);
-            lengths[i] = p_buf->len;
+            Py_buffer buffer;
+            if (PyObject_GetBuffer(item, &buffer, PyBUF_SIMPLE) < 0)
+                goto cleanup;
+            tokens[i] = sdsnewlen(buffer.buf, buffer.len);
+            lengths[i] = buffer.len;
+            PyBuffer_Release(&buffer);
         }
         else
         {

@@ -9,6 +9,15 @@ import glob
 import importlib.util
 import io
 import sys
+import sysconfig
+
+IS_CPYTHON = sys.implementation.name == "cpython"
+IS_FREE_THREADED = bool(sysconfig.get_config_var("Py_GIL_DISABLED"))
+
+# Build against the stable ABI so a single wheel covers every supported CPython
+# version. PyPy does not consume abi3 wheels, and free-threaded CPython does not
+# support the stable ABI yet, so both keep building against their own ABI.
+BUILD_ABI3 = IS_CPYTHON and not IS_FREE_THREADED
 
 
 def version():
@@ -67,6 +76,8 @@ ext = Extension(
     extra_compile_args=get_compiler_args(),
     extra_link_args=get_linker_args(),
     libraries=get_libraries(),
+    define_macros=[("Py_LIMITED_API", "0x030B0000")] if BUILD_ABI3 else [],
+    py_limited_api=BUILD_ABI3,
     include_dirs=[
         "vendor/libvalkey/include",
         "vendor/libvalkey/include/valkey",
@@ -91,6 +102,9 @@ setup(
     packages=["libvalkey"],
     package_data={"libvalkey": ["libvalkey.pyi", "py.typed"]},
     ext_modules=[ext],
+    # Must be set here rather than in setup.cfg: the option cannot be spelled
+    # conditionally there, and it makes setuptools reject free-threaded builds.
+    options={"bdist_wheel": {"py_limited_api": "cp311"}} if BUILD_ABI3 else {},
     python_requires=">=3.11",
     project_urls={
         "Changes": "https://github.com/valkey-io/libvalkey-py/releases",

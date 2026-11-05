@@ -55,11 +55,10 @@ PyObject *mod_libvalkey;
 PyMODINIT_FUNC PyInit_libvalkey(void)
 
 {
-    if (PyType_Ready(&libvalkey_ReaderType) < 0) {
+    mod_libvalkey = PyModule_Create(&libvalkey_ModuleDef);
+    if (mod_libvalkey == NULL) {
         return NULL;
     }
-
-    mod_libvalkey= PyModule_Create(&libvalkey_ModuleDef);
 
     /* Setup custom exceptions */
     LIBVALKEY_STATE->VkErr_Base =
@@ -76,8 +75,18 @@ PyMODINIT_FUNC PyInit_libvalkey(void)
     Py_INCREF(LIBVALKEY_STATE->VkErr_ReplyError);
     PyModule_AddObject(mod_libvalkey, "ReplyError", LIBVALKEY_STATE->VkErr_ReplyError);
 
-    Py_INCREF(&libvalkey_ReaderType);
-    PyModule_AddObject(mod_libvalkey, "Reader", (PyObject *)&libvalkey_ReaderType);
+    PyObject *reader_type = PyType_FromSpec(&libvalkey_ReaderSpec);
+    if (reader_type == NULL) {
+        Py_DECREF(mod_libvalkey);
+        mod_libvalkey = NULL;
+        return NULL;
+    }
+    if (PyModule_AddObject(mod_libvalkey, "Reader", reader_type) < 0) {
+        Py_DECREF(reader_type);
+        Py_DECREF(mod_libvalkey);
+        mod_libvalkey = NULL;
+        return NULL;
+    }
 
     return mod_libvalkey;
 }
