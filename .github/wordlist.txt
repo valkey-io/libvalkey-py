@@ -4,12 +4,14 @@ CAS
 Customizable
 ElastiCache
 FPM
+GIL
 HOWTO
 IANA
 Kops
 LRANGE
 Lua
 Misspelled words:
+PEP
 PSR
 Packagist
 PyPI

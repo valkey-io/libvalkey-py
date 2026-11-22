@@ -1,3 +1,6 @@
+* Support free-threaded Python (3.13t and newer): importing the extension no longer enables the GIL, and `Reader` and `pack_command` can be used from several threads. `Reader.feed`, `Reader.gets` and `Reader.__init__` raise `RuntimeError` if called while a `gets` call on the same `Reader` is running Python code (a `replyError` or `protocolError` callable, a codec or an error handler).
+* Fix a use-after-free of the `encoding` and `errors` names, leaks of half-built replies, an overflow in the `Reader.feed` offset and length check, `Reader.__init__` applying only part of its arguments when it fails, and a failing `replyError` callable leaving an exception set (it later surfaced as `SystemError` or as the wrong error).
+* Fix `pack_command` crashing on an int with more digits than `sys.get_int_max_str_digits()` allows, on a failing `__repr__` and on a released `memoryview` (now `ValueError`), and packing the wrong bytes for a non-contiguous `memoryview` (now `BufferError`).
 * Implement pack_command that serializes redis-py command to the RESP bytes object.
 * Implement garbage collection support in Reader (#162)
 * Python 3.12

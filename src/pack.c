@@ -1,6 +1,8 @@
 #include "pack.h"
 #include "sds.h"
 
+#include <limits.h>
+
 #ifndef _MSC_VER
 #include <valkey/valkey.h>
 #else
@@ -20,10 +22,12 @@ extern sds sdsnewlen(const void *init, size_t initlen);
 
 #include <valkey/alloc.h>
 
+/* Safe to call from several threads at once: it only reads its argument, which
+ * the caller keeps alive, and the items of a tuple cannot change. Items that
+ * can change, a memoryview, are copied while an export holds their buffer. */
 PyObject *
 pack_command(PyObject *cmd)
 {
-    assert(cmd);
     PyObject *result = NULL;
 
     if (cmd == NULL || !PyTuple_Check(cmd))
@@ -33,37 +37,33 @@ pack_command(PyObject *cmd)
         return NULL;
     }
 
-    Py_ssize_t tokens_number = PyTuple_Size(cmd);
-    sds *tokens = vk_malloc(sizeof(sds) * tokens_number);
-    if (tokens == NULL)
+    Py_ssize_t tokens_number = PyTuple_GET_SIZE(cmd);
+    if (tokens_number > INT_MAX)
     {
-        return PyErr_NoMemory();
+        PyErr_SetString(PyExc_OverflowError, "Too many arguments in the command.");
+        return NULL;
     }
 
-    memset(tokens, 0, sizeof(sds) * tokens_number);
-
-    size_t *lengths = vk_malloc(sizeof(size_t) * tokens_number);
-    if (lengths == NULL)
+    /* One more than needed, so that an empty command does not ask for 0 bytes. */
+    sds *tokens = vk_calloc(tokens_number + 1, sizeof(sds));
+    size_t *lengths = vk_malloc(sizeof(size_t) * (tokens_number + 1));
+    char *resp_bytes = NULL;
+    if (tokens == NULL || lengths == NULL)
     {
-        sds_free(tokens);
-        return PyErr_NoMemory();
+        PyErr_NoMemory();
+        goto cleanup;
     }
 
     Py_ssize_t len = 0;
-    for (Py_ssize_t i = 0; i < PyTuple_Size(cmd); i++)
+    for (Py_ssize_t i = 0; i < tokens_number; i++)
     {
-        PyObject *item = PyTuple_GetItem(cmd, i);
+        PyObject *item = PyTuple_GET_ITEM(cmd, i);
 
         if (PyBytes_Check(item))
         {
-            char *bytes = NULL;
-            Py_buffer buffer;
-            PyObject_GetBuffer(item, &buffer, PyBUF_SIMPLE);
-            PyBytes_AsStringAndSize(item, &bytes, &len);
-            tokens[i] = sdsempty();
-            tokens[i] = sdscpylen(tokens[i], bytes, len);
-            lengths[i] = buffer.len;
-            PyBuffer_Release(&buffer);
+            len = PyBytes_GET_SIZE(item);
+            tokens[i] = sdsnewlen(PyBytes_AS_STRING(item), len);
+            lengths[i] = len;
         }
         else if (PyUnicode_Check(item))
         {
@@ -79,16 +79,41 @@ pack_command(PyObject *cmd)
         }
         else if (PyMemoryView_Check(item))
         {
-            Py_buffer *p_buf = PyMemoryView_GET_BUFFER(item);
-            tokens[i] = sdsnewlen(p_buf->buf, p_buf->len);
-            lengths[i] = p_buf->len;
+            /* Ask for the buffer rather than reading the memoryview's own copy
+             * of it: that is how a released memoryview raises ValueError and a
+             * non-contiguous one BufferError, where the copy would be read
+             * from memory that is gone or is not laid out as one block. The
+             * export also keeps another thread from releasing the memoryview
+             * or resizing what it views while it is copied. */
+            Py_buffer view;
+            if (PyObject_GetBuffer(item, &view, PyBUF_SIMPLE) < 0)
+            {
+                goto cleanup;
+            }
+
+            tokens[i] = sdsnewlen(view.buf, view.len);
+            lengths[i] = view.len;
+            PyBuffer_Release(&view);
         }
         else
         {
             if (PyLong_CheckExact(item) || PyFloat_Check(item))
             {
+                /* Fails for an int with more digits than
+                 * sys.get_int_max_str_digits() allows, and for a float
+                 * subclass with a __repr__ that raises. */
                 PyObject *repr = PyObject_Repr(item);
+                if (repr == NULL)
+                {
+                    goto cleanup;
+                }
+
                 const char *bytes = PyUnicode_AsUTF8AndSize(repr, &len);
+                if (bytes == NULL)
+                {
+                    Py_DECREF(repr);
+                    goto cleanup;
+                }
 
                 tokens[i] = sdsnewlen(bytes, len);
                 lengths[i] = len;
@@ -101,11 +126,15 @@ pack_command(PyObject *cmd)
                 goto cleanup;
             }
         }
+
+        if (tokens[i] == NULL)
+        {
+            PyErr_NoMemory();
+            goto cleanup;
+        }
     }
 
-    char *resp_bytes = NULL;
-
-    len = valkeyFormatCommandArgv(&resp_bytes, tokens_number, (const char **)tokens, lengths);
+    len = valkeyFormatCommandArgv(&resp_bytes, (int)tokens_number, (const char **)tokens, lengths);
 
     if (len == -1)
     {
@@ -117,7 +146,8 @@ pack_command(PyObject *cmd)
     result = PyBytes_FromStringAndSize(resp_bytes, len);
     vk_free(resp_bytes);
 cleanup:
-    sdsfreesplitres(tokens, tokens_number);
+    /* The entries that were not reached are NULL, which sdsfree() accepts. */
+    sdsfreesplitres(tokens, (int)tokens_number);
     vk_free(lengths);
     return result;
 }
