@@ -117,6 +117,24 @@ its `except` clauses), `Reader` can be initialized with the `protocolError` and
 subclass of `Exception`. When not provided, `Reader` will use the default
 error types.
 
+## Free threading
+
+libvalkey-py supports free-threaded builds of Python ([PEP 703](https://peps.python.org/pep-0703/)).
+Importing it does not turn the GIL back on. Every `Reader` method can be called
+from several threads at the same time, and each call runs to completion on its
+own. `pack_command` can be called from any thread too.
+
+A `Reader` is one ordered stream of replies, so share it between threads only
+when they are meant to work on the same stream. The usual setup is one `Reader`
+per connection.
+
+`Reader.gets` can run Python code while it builds a reply: the functions given
+as `replyError` and `protocolError`, and custom decoders or error handlers used
+for `encoding` and `errors`. While that is going on, calling `feed`, `gets` or
+`__init__` on the same `Reader` (from that code or from another thread) raises
+`RuntimeError`, and the `Reader` is not changed. Try again once the first `gets`
+call has returned.
+
 ## Benchmarks
 
 The repository contains a benchmarking script in the `benchmark` directory,

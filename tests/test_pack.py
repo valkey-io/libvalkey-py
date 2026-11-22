@@ -1,3 +1,5 @@
+import sys
+
 import pytest
 
 import libvalkey
@@ -79,3 +81,63 @@ def test_wrong_type():
 
     with pytest.raises(TypeError):
         libvalkey.pack_command(("HSET", "foo", Bar()))
+
+
+def test_empty_command():
+    assert libvalkey.pack_command(()) == b"*0\r\n"
+
+
+def test_empty_items():
+    assert (
+        libvalkey.pack_command(("SET", b"", "", memoryview(b"")))
+        == b"*4\r\n$3\r\nSET\r\n$0\r\n\r\n$0\r\n\r\n$0\r\n\r\n"
+    )
+
+
+@pytest.mark.parametrize("cmd", [["SET", "a"], None, "SET", 1, {"SET": "a"}])
+def test_argument_must_be_a_tuple(cmd):
+    with pytest.raises(TypeError):
+        libvalkey.pack_command(cmd)
+
+
+def test_released_memoryview():
+    view = memoryview(b"abc")
+    view.release()
+    with pytest.raises(ValueError):
+        libvalkey.pack_command(("SET", "a", view))
+
+
+def test_memoryview_that_is_not_contiguous():
+    # Its content is b"ace", which is not what is in memory.
+    with pytest.raises(BufferError):
+        libvalkey.pack_command(("SET", "a", memoryview(b"abcdef")[::2]))
+
+
+def test_memoryview_of_a_slice():
+    assert libvalkey.pack_command(("SET", "a", memoryview(b"abcdef")[1:4])) == (
+        b"*3\r\n$3\r\nSET\r\n$1\r\na\r\n$3\r\nbcd\r\n"
+    )
+
+
+def test_int_with_more_digits_than_python_converts():
+    limit = sys.get_int_max_str_digits()
+    sys.set_int_max_str_digits(640)
+    try:
+        with pytest.raises(ValueError):
+            libvalkey.pack_command(("SET", "a", 10**700))
+    finally:
+        sys.set_int_max_str_digits(limit)
+
+
+def test_float_subclass_with_failing_repr():
+    class BadFloat(float):
+        def __repr__(self):
+            raise KeyError("repr")
+
+    with pytest.raises(KeyError):
+        libvalkey.pack_command(("SET", "a", BadFloat(1.5)))
+
+
+def test_str_that_cannot_be_encoded():
+    with pytest.raises(UnicodeEncodeError):
+        libvalkey.pack_command(("SET", "a", "\ud800"))

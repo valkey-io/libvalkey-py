@@ -52,32 +52,77 @@ static struct PyModuleDef libvalkey_ModuleDef = {
 /* Keep pointer around for other classes to access the module state. */
 PyObject *mod_libvalkey;
 
+/* Adds a new reference to obj to the module, and leaves the caller's own
+ * reference alone, which PyModule_AddObject() only does when it succeeds. */
+static int add_object(PyObject *mod, const char *name, PyObject *obj) {
+    Py_INCREF(obj);
+    if (PyModule_AddObject(mod, name, obj) < 0) {
+        Py_DECREF(obj);
+        return -1;
+    }
+    return 0;
+}
+
 PyMODINIT_FUNC PyInit_libvalkey(void)
 
 {
+    PyObject *mod;
+    struct libvalkey_ModuleState *state;
+
     if (PyType_Ready(&libvalkey_ReaderType) < 0) {
         return NULL;
     }
 
-    mod_libvalkey= PyModule_Create(&libvalkey_ModuleDef);
+    mod = PyModule_Create(&libvalkey_ModuleDef);
+    if (mod == NULL) {
+        return NULL;
+    }
+
+#ifdef Py_GIL_DISABLED
+    /* Everything this extension shares between threads is protected, see
+     * "Thread safety" in reader.c. Without this declaration importing it turns
+     * the GIL back on. */
+    if (PyUnstable_Module_SetGIL(mod, Py_MOD_GIL_NOT_USED) < 0) {
+        goto error;
+    }
+#endif
 
     /* Setup custom exceptions */
-    LIBVALKEY_STATE->VkErr_Base =
+    state = GET_STATE(mod);
+    state->VkErr_Base =
         PyErr_NewException(MOD_LIBVALKEY ".LibvalkeyError", PyExc_Exception, NULL);
-    LIBVALKEY_STATE->VkErr_ProtocolError =
-        PyErr_NewException(MOD_LIBVALKEY ".ProtocolError", LIBVALKEY_STATE->VkErr_Base, NULL);
-    LIBVALKEY_STATE->VkErr_ReplyError =
-        PyErr_NewException(MOD_LIBVALKEY ".ReplyError", LIBVALKEY_STATE->VkErr_Base, NULL);
+    if (state->VkErr_Base == NULL) {
+        goto error;
+    }
+    state->VkErr_ProtocolError =
+        PyErr_NewException(MOD_LIBVALKEY ".ProtocolError", state->VkErr_Base, NULL);
+    if (state->VkErr_ProtocolError == NULL) {
+        goto error;
+    }
+    state->VkErr_ReplyError =
+        PyErr_NewException(MOD_LIBVALKEY ".ReplyError", state->VkErr_Base, NULL);
+    if (state->VkErr_ReplyError == NULL) {
+        goto error;
+    }
 
-    Py_INCREF(LIBVALKEY_STATE->VkErr_Base);
-    PyModule_AddObject(mod_libvalkey, "LibvalkeyError", LIBVALKEY_STATE->VkErr_Base);
-    Py_INCREF(LIBVALKEY_STATE->VkErr_ProtocolError);
-    PyModule_AddObject(mod_libvalkey, "ProtocolError", LIBVALKEY_STATE->VkErr_ProtocolError);
-    Py_INCREF(LIBVALKEY_STATE->VkErr_ReplyError);
-    PyModule_AddObject(mod_libvalkey, "ReplyError", LIBVALKEY_STATE->VkErr_ReplyError);
+    if (add_object(mod, "LibvalkeyError", state->VkErr_Base) < 0 ||
+        add_object(mod, "ProtocolError", state->VkErr_ProtocolError) < 0 ||
+        add_object(mod, "ReplyError", state->VkErr_ReplyError) < 0 ||
+        add_object(mod, "Reader", (PyObject *)&libvalkey_ReaderType) < 0) {
+        goto error;
+    }
 
-    Py_INCREF(&libvalkey_ReaderType);
-    PyModule_AddObject(mod_libvalkey, "Reader", (PyObject *)&libvalkey_ReaderType);
+    /* Reader() reads the default exceptions from the module state for as long
+     * as the Reader type exists, which is as long as this extension is loaded.
+     * Hold a reference so that the state cannot go away (for instance when the
+     * module is deleted from sys.modules), and publish the pointer only now
+     * that the module is complete. */
+    Py_INCREF(mod);
+    mod_libvalkey = mod;
 
-    return mod_libvalkey;
+    return mod;
+
+error:
+    Py_DECREF(mod);
+    return NULL;
 }

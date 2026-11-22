@@ -34,6 +34,10 @@ jobs:
           - {python-version: '3.13', os: windows-11-arm}
           - {python-version: '3.14', os: windows-11-arm}
           - {python-version: '3.15', os: windows-11-arm}
+          # Free-threaded builds, run on Linux only for now.
+          - {python-version: '3.13t', os: ubuntu-slim}
+          - {python-version: '3.14t', os: ubuntu-slim}
+          - {python-version: '3.15t', os: ubuntu-slim}
       fail-fast: false
     env:
       ACTIONS_ALLOW_UNSECURE_COMMANDS: true

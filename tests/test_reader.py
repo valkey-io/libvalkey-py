@@ -1,3 +1,7 @@
+import codecs
+import gc
+import weakref
+
 import pytest
 
 import libvalkey
@@ -438,3 +442,127 @@ def test_reader_has_data(reader):
 def test_custom_not_enough_data():
     r = libvalkey.Reader(notEnoughData=Ellipsis)
     assert r.gets() == Ellipsis
+
+
+def test_feed_offset_and_length_cannot_overflow(reader):
+    data = b"+ok\r\n"
+    for offset, length in ((2**63 - 1, 2), (2, 2**63 - 1), (2**63 - 1, 2**63 - 1)):
+        with pytest.raises(ValueError):
+            reader.feed(data, offset, length)
+    assert not reader.has_data()
+
+
+def test_encoding_does_not_depend_on_the_argument_staying_alive():
+    # Strings made at run time are freed as soon as the call that got them ends.
+    encoding = "".join(["u", "t", "f", "-", "8"])
+    errors = "".join(["s", "t", "r", "i", "c", "t"])
+    reader = libvalkey.Reader(encoding=encoding, errors=errors)
+    reader.set_encoding("".join(["l", "a", "t", "i", "n", "-", "1"]), errors)
+    reader.__init__(encoding=encoding, errors=errors)
+    del encoding, errors
+    junk = [("x" * 5 + str(i)) for i in range(20000)]  # reuses the freed memory
+    reader.feed(b"$5\r\nhello\r\n")
+    assert reader.gets() == "hello"
+    assert len(junk) == 20000
+
+
+def test_failed_init_changes_nothing():
+    reader = libvalkey.Reader(replyError=KeyError, protocolError=OSError, encoding="utf-8")
+    for kwargs in (
+        {"replyError": ValueError, "encoding": "no-such-codec"},
+        {"protocolError": ValueError, "replyError": "not callable"},
+        {"replyError": ValueError, "protocolError": "not callable"},
+        {"replyError": ValueError, "encoding": "utf-8", "errors": "no-such-handler"},
+    ):
+        with pytest.raises((LookupError, TypeError)):
+            reader.__init__(**kwargs)
+    reader.feed(b"-ERR\r\n+\xc3\xa9\r\nx")
+    assert type(reader.gets()) is KeyError
+    assert reader.gets() == "\xe9"
+    with pytest.raises(OSError):
+        reader.gets()
+
+
+class Marker(Exception):
+    """An object that can be weakly referenced to see when it is freed."""
+
+
+def test_map_key_waiting_for_its_value_is_released_with_the_reader():
+    refs = []
+
+    def reply_error(message):
+        marker = Marker(message)
+        refs.append(weakref.ref(marker))
+        return marker
+
+    reader = libvalkey.Reader(replyError=reply_error)
+    reader.feed(b"%1\r\n-ERR key\r\n")
+    assert reader.gets() is False
+    assert len(refs) == 1 and refs[0]() is not None
+    del reader
+    gc.collect()
+    assert refs[0]() is None
+
+
+def test_error_kept_for_an_incomplete_reply_is_released_with_the_reader():
+    refs = []
+
+    def fail(exc):
+        marker = Marker("decode")
+        refs.append(weakref.ref(marker))
+        raise marker
+
+    name = "libvalkey_test_raise_%d" % id(fail)
+    codecs.register_error(name, fail)
+    reader = libvalkey.Reader(encoding="utf-8", errors=name)
+    reader.feed(b"*2\r\n$1\r\n\xff\r\n")
+    assert reader.gets() is False
+    assert len(refs) == 1 and refs[0]() is not None
+    del reader
+    gc.collect()
+    assert refs[0]() is None
+
+
+def test_incomplete_reply_is_seen_by_the_garbage_collector():
+    def build():
+        marker = Marker("in the reply")
+        reader = libvalkey.Reader(replyError=lambda message: marker)
+        marker.reader = reader  # a cycle through the reply that is being built
+        reader.feed(b"*2\r\n-ERR a\r\n")
+        assert reader.gets() is False
+        return weakref.ref(marker)
+
+    ref = build()
+    gc.collect()
+    assert ref() is None
+
+
+@pytest.mark.parametrize(
+    "key",
+    [b"*0\r\n", b"*2\r\n:1\r\n:2\r\n", b"~1\r\n:1\r\n", b"%1\r\n+a\r\n:1\r\n", b">1\r\n:1\r\n"],
+)
+def test_aggregate_as_map_key(reader, key):
+    reader.feed(b"%1\r\n" + key + b":1\r\n")
+    with pytest.raises(TypeError):
+        reader.gets()
+
+
+def test_verbatim_string_without_content_type(reader):
+    for payload in (b"=3\r\nabc\r\n", b"=7\r\nabcdefg\r\n"):
+        reader.__init__()
+        reader.feed(payload)
+        with pytest.raises(libvalkey.ProtocolError):
+            reader.gets()
+
+
+def test_empty_verbatim_string(reader):
+    reader.feed(b"=4\r\ntxt:\r\n")
+    assert reader.gets() == b""
+
+
+def test_convert_sets_to_lists_property(reader):
+    assert reader.convertSetsToLists in (True, False)
+    reader.__init__(convertSetsToLists=True)
+    assert reader.convertSetsToLists is True
+    reader.__init__()
+    assert reader.convertSetsToLists is False

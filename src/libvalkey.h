@@ -8,6 +8,15 @@
 #define PyMODINIT_FUNC void
 #endif
 
+/* Per-object critical sections. CPython 3.13+ provides them, and they only do
+ * something in free-threaded builds. Anywhere else (older CPython, PyPy) the GIL
+ * already serializes access and they are no-ops. Never leave the block between
+ * them with return or goto, or the lock is not released. */
+#ifndef Py_BEGIN_CRITICAL_SECTION
+#define Py_BEGIN_CRITICAL_SECTION(op) {
+#define Py_END_CRITICAL_SECTION() }
+#endif
+
 #ifndef MOD_LIBVALKEY
 #define MOD_LIBVALKEY "libvalkey"
 #endif

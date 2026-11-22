@@ -7,9 +7,13 @@
 typedef struct {
     PyObject_HEAD
     valkeyReader *reader;
-    char *encoding;
-    char *errors;
+    /* The codec and error handler names, as bytes objects that are replaced and
+     * never modified. NULL means no decoding, and "strict" respectively. */
+    PyObject *encoding;
+    PyObject *errors;
     int shouldDecode;
+    /* Set while gets() runs, see "Thread safety" in reader.c. */
+    int busy;
     PyObject *protocolErrorClass;
     PyObject *replyErrorClass;
     PyObject *notEnoughDataObject;
